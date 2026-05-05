@@ -453,7 +453,6 @@ function App() {
   const [synced,       setSynced]    = useState(false);
   const [fd,           setFd]        = useState({});
   const [streak,       setStreak]    = useState(0);
-  const [qIndex,       setQI]        = useState(0);
   const [answers,      setAnswers]   = useState([]);
   const [mDay,         setMDay]      = useState(0);
   const [mDone,        setMDone]     = useState(false);
@@ -480,7 +479,6 @@ function App() {
         setFd(d);
         if (!isTyping.current) {
           setStreak(d.streak||0);
-          setQI(d.qIndex||0);
           setAnswers(d.answers||[]);
           setMDay(d.mDay||0);
           setMDone(d.mDone||false);
@@ -551,7 +549,7 @@ function App() {
   );
 
   const ctx = {
-    fd, streak, qIndex, answers, mDay, mDone, customIdeas, activityCount,
+    fd, streak, answers, mDay, mDone, customIdeas, activityCount,
     allIdeas, todayMission, cats, synced, actor, sec,
     showAddIdea, newIdeaE, newIdeaT, newIdeaD, isTyping,
     updateRoom, showToast, setSec, setActor, setSAI,
@@ -723,22 +721,37 @@ function HomeSection() {
   );
 }
 
-/* ── Q SECTION — local state for textarea so Firebase won't dismiss keyboard ── */
+/* ── Q SECTION — each person has their own independent progress ── */
 function QSection() {
-  const {qIndex, answers, streak, activityCount, cats, updateRoom, showToast} = useContext(Ctx);
+  const {fd, answers, streak, activityCount, actor, cats, updateRoom, showToast} = useContext(Ctx);
   const [qFilter, setQFilter] = useState("all");
   const [localText, setLocalText] = useState("");
-  const [localWho,  setLocalWho]  = useState("h");
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Each person has their own question index stored in Firebase
+  const myKey   = actor==="h" ? "qIndexJuha" : "qIndexJane";
+  const myIndex = fd[myKey] || 0;
+  const currentQ = QUESTIONS[myIndex % QUESTIONS.length];
+
+  // My answers only
+  const myAnswers = answers.filter(a => a.who === actor);
 
   const doSubmit = () => {
     const txt = localText.trim();
     if (!txt) return;
-    const entry = {id:Date.now(), who:localWho, q:QUESTIONS[qIndex].q, text:txt,
-      time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),
-      date:new Date().toLocaleDateString("en-GB")};
-    updateRoom({answers:[entry,...answers], streak:streak+1, qIndex:(qIndex+1)%QUESTIONS.length, activityCount:(activityCount||0)+1});
-    showToast(`💬 Saved · ${localWho==="h"?"🦅 Juha":"🌸 Jane"}`);
+    const entry = {
+      id: Date.now(), who: actor, q: currentQ.q, text: txt,
+      time: new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),
+      date: new Date().toLocaleDateString("en-GB"),
+    };
+    const nextIndex = (myIndex + 1) % QUESTIONS.length;
+    updateRoom({
+      answers: [entry, ...answers],
+      streak: streak + 1,
+      activityCount: (activityCount||0) + 1,
+      [myKey]: nextIndex,
+    });
+    showToast(`💬 Saved · ${actor==="h"?"🦅 Juha":"🌸 Jane"}`);
     setLocalText(""); setSaving(true);
     setTimeout(()=>setSaving(false), 1200);
   };
@@ -749,13 +762,22 @@ function QSection() {
     <div className="section-wrap" style={{paddingTop:20}}>
       <div style={{textAlign:"center",marginBottom:16}}>
         <div className="mono" style={{fontSize:9,color:C.purple,letterSpacing:3,marginBottom:6}}>100 QUESTIONS FOR CLOSENESS</div>
-        <div style={{fontSize:16,fontWeight:700}}>Question #{qIndex+1} <span style={{color:C.dim}}>of {QUESTIONS.length}</span></div>
+        <div style={{fontSize:16,fontWeight:700}}>
+          {actor==="h"?"🦅 Juha":"🌸 Jane"} · Question #{myIndex+1} <span style={{color:C.dim}}>of {QUESTIONS.length}</span>
+        </div>
+        {(()=>{
+          const otherKey = actor==="h" ? "qIndexJane" : "qIndexJuha";
+          const otherIdx = (fd[otherKey]||0) + 1;
+          const otherName = actor==="h" ? "🌸 Jane" : "🦅 Juha";
+          return <div style={{fontSize:11,color:C.dim,marginTop:4}}>{otherName} is on question #{otherIdx}</div>;
+        })()}
         <div style={{display:"flex",justifyContent:"center",gap:3,marginTop:10,flexWrap:"wrap"}}>
           {QUESTIONS.map((_,i)=>(
-            <div key={i} style={{width:i===qIndex?14:4,height:4,borderRadius:99,background:i===qIndex?C.purple:i<qIndex?C.indigo:C.line,transition:"all .3s"}}/>
+            <div key={i} style={{width:i===myIndex?14:4,height:4,borderRadius:99,background:i===myIndex?C.purple:i<myIndex?C.indigo:C.line,transition:"all .3s"}}/>
           ))}
         </div>
       </div>
+
       {/* Category filter */}
       <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}}>
         <button className={`chip${qFilter==="all"?" active":""}`} onClick={()=>setQFilter("all")}>All</button>
@@ -763,6 +785,7 @@ function QSection() {
           <button key={cat} className={`chip${qFilter===cat?" active":""}`} onClick={()=>setQFilter(cat)} style={{whiteSpace:"nowrap"}}>{cat}</button>
         ))}
       </div>
+
       {streak>0&&(
         <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
           <div style={{background:"rgba(251,191,36,.1)",border:`1.5px solid ${C.gold}`,borderRadius:20,padding:"5px 16px",display:"flex",alignItems:"center",gap:6}}>
@@ -770,20 +793,21 @@ function QSection() {
           </div>
         </div>
       )}
-      <div className="q-card" key={qIndex}>
+
+      <div className="q-card" key={myIndex}>
         <div style={{display:"inline-block",background:"rgba(167,139,250,.12)",border:"1.5px solid rgba(167,139,250,.3)",borderRadius:20,padding:"3px 12px",marginBottom:16}}>
-          <span className="mono" style={{fontSize:10,color:C.purple}}>{QUESTIONS[qIndex].cat}</span>
+          <span className="mono" style={{fontSize:10,color:C.purple}}>{currentQ.cat}</span>
         </div>
-        <div style={{fontSize:17,lineHeight:1.65,color:C.text,fontWeight:600}}>{QUESTIONS[qIndex].q}</div>
+        <div style={{fontSize:17,lineHeight:1.65,color:C.text,fontWeight:600}}>{currentQ.q}</div>
         <div className="mono" style={{marginTop:14,fontSize:10,color:C.dim}}>discuss · reflect · be honest</div>
       </div>
-      {/* Answer form — uses LOCAL state so keyboard stays open */}
+
+      {/* Answer form */}
       <div style={{marginTop:16,background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:18,padding:"18px 16px"}}>
-        <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>Write your answer</div>
-        <div className="seg-wrap" style={{marginBottom:12}}>
-          <button className={`seg-btn${localWho==="h"?" active":""}`} onClick={()=>setLocalWho("h")}>🦅 Juha answers</button>
-          <button className={`seg-btn${localWho==="w"?" active":""}`} onClick={()=>setLocalWho("w")}>🌸 Jane answers</button>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>
+          {actor==="h"?"🦅 Juha":"🌸 Jane"} — write your answer
         </div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Your progress is independent — answer at your own pace.</div>
         <textarea className="ans-input" rows={3}
           placeholder="Be honest. This is just for you two."
           value={localText}
@@ -794,27 +818,31 @@ function QSection() {
           style={{marginTop:12,background:`linear-gradient(135deg,${C.indigo},${C.purple})`}}
           disabled={saving||!localText.trim()}
           onClick={doSubmit}>
-          {saving?"Saved ✓":"Save answer →"}
+          {saving?"Saved ✓ · Next question loading…":"Save answer →"}
         </button>
       </div>
-      <button className="btn-ghost" onClick={()=>updateRoom({qIndex:(qIndex+1)%QUESTIONS.length})}
+
+      <button className="btn-ghost"
+        onClick={()=>updateRoom({[myKey]:(myIndex+1)%QUESTIONS.length})}
         style={{width:"100%",marginTop:10,padding:"12px 0",fontSize:12,textAlign:"center"}}>
         → Skip to next question
       </button>
+
       <div style={{marginTop:16,padding:"14px 16px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-          <span style={{fontSize:11,color:C.dim}}>Progress</span>
-          <span className="mono" style={{fontSize:11,color:C.muted}}>{answers.length} answered</span>
+          <span style={{fontSize:11,color:C.dim}}>My progress</span>
+          <span className="mono" style={{fontSize:11,color:C.muted}}>{myAnswers.length} answered</span>
         </div>
         <div className="prog-track">
-          <div className="prog-fill" style={{width:`${(qIndex/QUESTIONS.length)*100}%`,background:`linear-gradient(90deg,${C.indigo},${C.purple})`}}/>
+          <div className="prog-fill" style={{width:`${(myIndex/QUESTIONS.length)*100}%`,background:`linear-gradient(90deg,${C.indigo},${C.purple})`}}/>
         </div>
       </div>
-      {answers.length>0&&(
+
+      {myAnswers.length>0&&(
         <div style={{marginTop:20}}>
-          <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}}>Recent answers</div>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}}>My recent answers</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {answers.slice(0,5).map(a=>(
+            {myAnswers.slice(0,5).map(a=>(
               <div key={a.id} className="ans-bubble">
                 <div style={{fontSize:10,color:C.dim,marginBottom:5,fontStyle:"italic"}}>"{a.q.slice(0,60)}…"</div>
                 <div style={{fontSize:13,color:C.text,fontWeight:500,marginBottom:6,lineHeight:1.5}}>{a.text}</div>

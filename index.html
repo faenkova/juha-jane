@@ -31,7 +31,10 @@ const APP_PASSWORD = "my love";
 </script>
 
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useCallback, createContext, useContext } = React;
+
+/* ─── APP CONTEXT — shared data without re-creating child components ─── */
+const Ctx = createContext({});
 
 /* ─── PALETTE ─── */
 const C = {
@@ -555,10 +558,8 @@ function App() {
   const allIdeas=[...IDEAS_PRESET,...customIdeas];
   const todayMission=MISSIONS[mDay%MISSIONS.length];
   const cats=[...new Set(QUESTIONS.map(q=>q.cat))];
-  const filteredQ=qFilter==="all"?QUESTIONS:QUESTIONS.filter(q=>q.cat===qFilter);
 
   if(!unlocked) return <LockScreen onUnlock={()=>setUnlocked(true)}/>;
-
   if(loading) return (
     <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
       <div style={{fontSize:40}} className="heart">💑</div>
@@ -566,9 +567,65 @@ function App() {
     </div>
   );
 
-  /* ── SECTIONS ── */
-  const HomeSection = ()=>{
-    const aCount=answers.length;
+  const ctx = { fd, streak, qIndex, answers, mDay, mDone, customIdeas, activityCount, allIdeas, todayMission, cats, synced, actor, sec, showAddIdea, newIdeaE, newIdeaT, newIdeaD, isTyping,
+    updateRoom, showToast, setSec, setActor, setSAI, setNIE, setNIT, setNID, completeMission, toggleIdea, addIdea };
+
+  return (
+    <Ctx.Provider value={ctx}>
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"}}>
+      <div style={{background:"#0a0a10",padding:"14px 16px 12px",flexShrink:0,borderBottom:`1px solid ${C.line}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>
+              <span className="heart" style={{marginRight:8}}>💑</span>Us
+            </div>
+            <div style={{fontSize:11,color:C.dim,marginTop:2}}>Juha & Jane · private</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div className={`sync-dot${synced?"":" off"}`}/>
+            <span className="mono" style={{fontSize:9,color:synced?C.green:C.dim}}>{synced?"live":"offline"}</span>
+          </div>
+        </div>
+      </div>
+      <TickerBar streak={streak} activityCount={activityCount}/>
+      <div className="nav-tabs" style={{flexShrink:0}}>
+        {[
+          ["home",    "🏠 Home"],
+          ["questions","💬 Connect"],
+          ["missions","🎯 Missions"],
+          ["ideas",   "✨ Ideas"],
+          ["plan",    "🗺️ Plan"],
+          ["faith",   "✝️ Faith"],
+          ["love",    "💕 Love"],
+          ["honest",  "🔥 Honest"],
+          ["history", "📖 History"],
+        ].map(([s,l])=>(
+          <button key={s} className={`nav-btn${sec===s?" active":""}${s==="questions"?" q-tab":""}${s==="missions"?" m-tab":""}${s==="ideas"?" i-tab":""}${s==="plan"?" p-tab":""}${s==="faith"?" f-tab":""}${s==="love"?" l-tab":""}${s==="honest"?" t-tab":""}`} onClick={()=>setSec(s)}>{l}</button>
+        ))}
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"0 14px 100px"}}>
+        {sec==="home"     &&<HomeSection/>}
+        {sec==="questions"&&<QSection/>}
+        {sec==="missions" &&<MissionsSection/>}
+        {sec==="ideas"    &&<IdeasSection/>}
+        {sec==="plan"     &&<PlanSection/>}
+        {sec==="faith"    &&<FaithSection/>}
+        {sec==="love"     &&<LoveSection/>}
+        {sec==="honest"   &&<HonestSection/>}
+        {sec==="history"  &&<HistorySection/>}
+      </div>
+      <div className="mono" style={{textAlign:"center",padding:"12px 14px",borderTop:`1.5px solid ${C.line}`,background:C.bg2,fontSize:9,color:C.dim,flexShrink:0,lineHeight:2}}>
+        Juha & Jane · private <span className="heart">♡</span>
+      </div>
+      <Modal open={!!modal} title={modal?.title} sub={modal?.sub} body={modal?.body} onClose={()=>setModal(null)} onConfirm={modal?.onConfirm} confirmLabel={modal?.confirmLabel||"Confirm"} confirmColor={modal?.confirmColor}/>
+      <Toast msg={toast.msg} phase={toast.phase}/>
+    </div>
+    </Ctx.Provider>
+  );
+}
+function HomeSection() {
+    const {fd,streak,allIdeas,todayMission,activityCount,mDone,actor,setActor,setSec,updateRoom,isTyping} = useContext(Ctx);
+    const aCount = useContext(Ctx).answers.length;
     const ideasDone=allIdeas.filter(i=>fd[`done_${i.e}_${encodeURIComponent(i.t)}`]).length;
     const {moscow,london,diff}=getTimes();
     const firebaseNotConfigured = firebaseConfig.apiKey === "PASTE_YOUR_KEY";
@@ -677,10 +734,11 @@ function App() {
         </div>
       </div>
     );
-  };
+}
 
-  const QSection = React.memo(()=>{
-    const taRef = useRef(null);
+function QSection() {
+    const {qIndex, answers, streak, activityCount, cats, updateRoom} = useContext(Ctx);
+    const [qFilter, setQFilter] = useState("all");
     const [localText, setLocalText] = useState("");
     const [localWho, setLocalWho]   = useState("h");
     const [saving, setSaving]       = useState(false);
@@ -776,9 +834,11 @@ function App() {
       )}
     </div>
   );
-});
+}
 
-  const MissionsSection = ()=>(
+function MissionsSection() {
+    const {mDay, mDone, todayMission, completeMission} = useContext(Ctx);
+    return (
     <div className="section-wrap" style={{paddingTop:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontSize:15,fontWeight:700}}>🎯 Daily Missions</div>
@@ -827,8 +887,11 @@ function App() {
       </div>
     </div>
   );
+}
 
-  const IdeasSection = ()=>(
+function IdeasSection() {
+    const {fd,allIdeas,showAddIdea,newIdeaE,newIdeaT,newIdeaD,toggleIdea,addIdea,setSAI,setNIE,setNIT,setNID} = useContext(Ctx);
+    return (
     <div className="section-wrap" style={{paddingTop:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:15,fontWeight:700}}>✨ Ideas for us</div>
@@ -876,8 +939,10 @@ function App() {
       )}
     </div>
   );
+}
 
-  const HistorySection = ()=>{
+function HistorySection() {
+    const {answers} = useContext(Ctx);
     const [hf,setHf]=useState("all");
     const filtered=hf==="all"?answers:answers.filter(a=>a.who===hf);
     return (
@@ -909,10 +974,11 @@ function App() {
         )}
       </div>
     );
-  };
+}
 
-  /* ── OUR PLAN ── */
-  const PlanSection = () => {
+/* ── OUR PLAN ── */
+function PlanSection() {
+    const {fd, activityCount, updateRoom, isTyping} = useContext(Ctx);
     const milestones = [
       {id:"m1",e:"💬",t:"Have the 'are we serious' talk",      d:"Explicitly agree on where this is going and on what timeline."},
       {id:"m2",e:"✈️",t:"Plan the next 3 visits",              d:"Put actual dates in the calendar. Not 'sometime soon'."},
@@ -958,10 +1024,11 @@ function App() {
         </div>
       </div>
     );
-  };
+}
 
-  /* ── FAITH & FAMILY ── */
-  const FaithSection = () => {
+/* ── FAITH & FAMILY ── */
+function FaithSection() {
+    const {fd, updateRoom, isTyping} = useContext(Ctx);
     const [activeTopic, setActiveTopic] = useState(null);
     const topics = [
       {id:"f1",e:"✝️",label:"Ceremony",        q:"How will we get married? Orthodox ceremony, Mormon ceremony, both, or civil?"},
@@ -1019,10 +1086,11 @@ function App() {
         </div>
       </div>
     );
-  };
+}
 
-  /* ── LOVE LANGUAGES ── */
-  const LoveSection = () => {
+/* ── LOVE LANGUAGES ── */
+function LoveSection() {
+    const {fd, updateRoom} = useContext(Ctx);
     const langs = [
       {id:"words",  e:"💬",t:"Words of affirmation",d:"Feeling loved through compliments, 'I love you', appreciation in words"},
       {id:"time",   e:"⏱️",t:"Quality time",        d:"Feeling loved through undivided attention, focused presence, shared experiences"},
@@ -1082,10 +1150,11 @@ function App() {
         )}
       </div>
     );
-  };
+}
 
-  /* ── HONEST SPACE ── */
-  const HonestSection = React.memo(() => {
+/* ── HONEST SPACE ── */
+function HonestSection() {
+    const {fd, activityCount, updateRoom} = useContext(Ctx);
     const [who,setWho]   = useState("h");
     const [text,setText] = useState("");
     const [saving,setSaving] = useState(false);
@@ -1149,64 +1218,6 @@ function App() {
         )}
       </div>
     );
-  };
-
-  return (
-    <div style={{background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"}}>
-
-      <div style={{background:"#0a0a10",padding:"14px 16px 12px",flexShrink:0,borderBottom:`1px solid ${C.line}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>
-              <span className="heart" style={{marginRight:8}}>💑</span>Us
-            </div>
-            <div style={{fontSize:11,color:C.dim,marginTop:2}}>Juha & Jane · private</div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div className={`sync-dot${synced?"":" off"}`}/>
-            <span className="mono" style={{fontSize:9,color:synced?C.green:C.dim}}>{synced?"live":"offline"}</span>
-          </div>
-        </div>
-      </div>
-
-      <TickerBar streak={streak} activityCount={activityCount}/>
-
-      <div className="nav-tabs" style={{flexShrink:0}}>
-        {[
-          ["home",    "🏠 Home"],
-          ["questions","💬 Connect"],
-          ["missions","🎯 Missions"],
-          ["ideas",   "✨ Ideas"],
-          ["plan",    "🗺️ Plan"],
-          ["faith",   "✝️ Faith"],
-          ["love",    "💕 Love"],
-          ["honest",  "🔥 Honest"],
-          ["history", "📖 History"],
-        ].map(([s,l])=>(
-          <button key={s} className={`nav-btn${sec===s?" active":""}${s==="questions"?" q-tab":""}${s==="missions"?" m-tab":""}${s==="ideas"?" i-tab":""}${s==="plan"?" p-tab":""}${s==="faith"?" f-tab":""}${s==="love"?" l-tab":""}${s==="honest"?" t-tab":""}`} onClick={()=>setSec(s)}>{l}</button>
-        ))}
-      </div>
-
-      <div style={{flex:1,overflowY:"auto",padding:"0 14px 100px"}}>
-        {sec==="home"     &&<HomeSection/>}
-        {sec==="questions"&&<QSection/>}
-        {sec==="missions" &&<MissionsSection/>}
-        {sec==="ideas"    &&<IdeasSection/>}
-        {sec==="plan"     &&<PlanSection/>}
-        {sec==="faith"    &&<FaithSection/>}
-        {sec==="love"     &&<LoveSection/>}
-        {sec==="honest"   &&<HonestSection/>}
-        {sec==="history"  &&<HistorySection/>}
-      </div>
-
-      <div className="mono" style={{textAlign:"center",padding:"12px 14px",borderTop:`1.5px solid ${C.line}`,background:C.bg2,fontSize:9,color:C.dim,flexShrink:0,lineHeight:2}}>
-        Juha & Jane · private <span className="heart">♡</span>
-      </div>
-
-      <Modal open={!!modal} title={modal?.title} sub={modal?.sub} body={modal?.body} onClose={()=>setModal(null)} onConfirm={modal?.onConfirm} confirmLabel={modal?.confirmLabel||"Confirm"} confirmColor={modal?.confirmColor}/>
-      <Toast msg={toast.msg} phase={toast.phase}/>
-    </div>
-  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);

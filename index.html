@@ -475,10 +475,11 @@ function App() {
   const toastRef = useRef(null);
 
   /* ── Firebase listener ── */
+  const isTyping = useRef(false);
   useEffect(()=>{
     if(!unlocked) return;
     const unsub = db.collection("rooms").doc(ROOM_ID).onSnapshot(doc=>{
-      if(doc.exists){
+      if(doc.exists && !isTyping.current){
         const d = doc.data();
         setFd(d);
         setStreak(d.streak||0);
@@ -488,6 +489,13 @@ function App() {
         setMDone(d.mDone||false);
         setCI(d.customIdeas||[]);
         setAC(d.activityCount||0);
+      } else if(doc.exists) {
+        // always update non-input fields even while typing
+        const d = doc.data();
+        setFd(d);
+        setStreak(d.streak||0);
+        setAnswers(d.answers||[]);
+        setMDone(d.mDone||false);
       }
       setLoading(false); setSynced(true);
     }, ()=>{setLoading(false);setSynced(false);});
@@ -562,10 +570,19 @@ function App() {
   const HomeSection = ()=>{
     const aCount=answers.length;
     const ideasDone=allIdeas.filter(i=>fd[`done_${i.e}_${encodeURIComponent(i.t)}`]).length;
-    const daysLeft=daysUntil(NEXT_VISIT);
     const {moscow,london,diff}=getTimes();
+    const firebaseNotConfigured = firebaseConfig.apiKey === "PASTE_YOUR_KEY";
     return (
       <div className="section-wrap" style={{paddingTop:20}}>
+
+        {/* Firebase warning */}
+        {firebaseNotConfigured&&(
+          <div style={{marginBottom:18,padding:"16px",background:"rgba(255,92,92,.1)",border:"1.5px solid rgba(255,92,92,.4)",borderRadius:16}}>
+            <div style={{fontSize:11,color:C.red,fontWeight:700,letterSpacing:1,marginBottom:6}}>⚠️ FIREBASE NOT CONNECTED</div>
+            <div style={{fontSize:13,color:C.text,lineHeight:1.6,marginBottom:8}}>Right now data is <b>not shared</b> between devices. Each phone/computer sees only its own data.</div>
+            <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>To sync between Juha & Jane:<br/>1. Go to <b>console.firebase.google.com</b><br/>2. Create a project → Firestore database<br/>3. Project Settings → Your apps → copy config<br/>4. Paste into the HTML file (top of script tag)</div>
+          </div>
+        )}
         <div style={{textAlign:"center",marginBottom:24}}>
           <div className="heart" style={{fontSize:46,marginBottom:10}}>💑</div>
           <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:4}}>Juha & Jane</div>
@@ -662,10 +679,26 @@ function App() {
     );
   };
 
-  const QSection = ()=>(
+  const QSection = React.memo(()=>{
+    const taRef = useRef(null);
+    const [localText, setLocalText] = useState("");
+    const [localWho, setLocalWho]   = useState("h");
+    const [saving, setSaving]       = useState(false);
+
+    const doSubmit = () => {
+      const txt = localText.trim();
+      if(!txt) return;
+      const entry={id:Date.now(),who:localWho,q:QUESTIONS[qIndex].q,text:txt,time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),date:new Date().toLocaleDateString("en-GB")};
+      const newQ=(qIndex+1)%QUESTIONS.length;
+      updateRoom({answers:[entry,...answers],streak:streak+1,qIndex:newQ,activityCount:(activityCount||0)+1});
+      setLocalText(""); setSaving(true);
+      setTimeout(()=>setSaving(false),1200);
+    };
+
+    return (
     <div className="section-wrap" style={{paddingTop:20}}>
       <div style={{textAlign:"center",marginBottom:16}}>
-        <div className="mono" style={{fontSize:9,color:C.purple,letterSpacing:3,marginBottom:6}}>100 QUESTIONS BEFORE MARRIAGE</div>
+        <div className="mono" style={{fontSize:9,color:C.purple,letterSpacing:3,marginBottom:6}}>100 QUESTIONS FOR CLOSENESS</div>
         <div style={{fontSize:16,fontWeight:700}}>Question #{QUESTIONS.indexOf(QUESTIONS.find(q=>q===QUESTIONS[qIndex]))+1} <span style={{color:C.dim}}>of {QUESTIONS.length}</span></div>
         <div style={{display:"flex",justifyContent:"center",gap:3,marginTop:10,flexWrap:"wrap"}}>
           {QUESTIONS.map((_,i)=>(
@@ -701,12 +734,15 @@ function App() {
       <div style={{marginTop:16,background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:18,padding:"18px 16px"}}>
         <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>Write your answer</div>
         <div className="seg-wrap" style={{marginBottom:12}}>
-          <button className={`seg-btn${answerWho==="h"?" active":""}`} onClick={()=>setAW("h")}>🦅 Juha answers</button>
-          <button className={`seg-btn${answerWho==="w"?" active":""}`} onClick={()=>setAW("w")}>🌸 Jane answers</button>
+          <button className={`seg-btn${localWho==="h"?" active":""}`} onClick={()=>setLocalWho("h")}>🦅 Juha answers</button>
+          <button className={`seg-btn${localWho==="w"?" active":""}`} onClick={()=>setLocalWho("w")}>🌸 Jane answers</button>
         </div>
-        <textarea className="ans-input" rows={3} placeholder="Be honest. This is just for you two." value={answerText} onChange={e=>setAT(e.target.value)} disabled={justAnswered}/>
-        <button className="btn-primary" style={{marginTop:12,background:`linear-gradient(135deg,${C.indigo},${C.purple})`,boxShadow:"0 4px 18px rgba(129,140,248,.25)"}} disabled={justAnswered||!answerText.trim()} onClick={submitAnswer}>
-          {justAnswered?"Saving…":"Save answer →"}
+        <textarea ref={taRef} className="ans-input" rows={3} placeholder="Be honest. This is just for you two."
+          value={localText}
+          onChange={e=>setLocalText(e.target.value)}
+          disabled={saving}/>
+        <button className="btn-primary" style={{marginTop:12,background:`linear-gradient(135deg,${C.indigo},${C.purple})`,boxShadow:"0 4px 18px rgba(129,140,248,.25)"}} disabled={saving||!localText.trim()} onClick={doSubmit}>
+          {saving?"Saved ✓":"Save answer →"}
         </button>
       </div>
 
@@ -740,6 +776,7 @@ function App() {
       )}
     </div>
   );
+});
 
   const MissionsSection = ()=>(
     <div className="section-wrap" style={{paddingTop:20}}>
@@ -912,10 +949,11 @@ function App() {
         </div>
         <div style={{marginTop:20,background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:16,padding:"16px"}}>
           <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}}>Our notes on the plan</div>
-          <textarea className="tension-input" rows={4}
+        <textarea className="tension-input" rows={4}
             placeholder="Write anything you've agreed, decided, or want to remember about your plan together..."
-            value={fd.planNotes||""}
-            onChange={e=>updateRoom({planNotes:e.target.value})}
+            defaultValue={fd.planNotes||""}
+            onFocus={()=>{isTyping.current=true}}
+            onBlur={e=>{isTyping.current=false; updateRoom({planNotes:e.target.value})}}
           />
         </div>
       </div>
@@ -961,7 +999,9 @@ function App() {
                   <div style={{padding:"0 16px 16px"}}>
                     <textarea className="tension-input" style={{borderColor:"rgba(251,115,22,.4)"}} rows={3}
                       placeholder="Write what you've discussed or decided..."
-                      value={note} onChange={e=>updateRoom({[key]:e.target.value})}/>
+                      defaultValue={note}
+                      onFocus={()=>{isTyping.current=true}}
+                      onBlur={e=>{isTyping.current=false; updateRoom({[key]:e.target.value})}}/>
                   </div>
                 )}
               </div>
@@ -973,7 +1013,9 @@ function App() {
           <div style={{fontSize:12,color:C.dim,marginBottom:10,lineHeight:1.5}}>What do you both believe about your relationship — regardless of denomination?</div>
           <textarea className="tension-input" rows={3}
             placeholder="e.g. We both believe our relationship is guided by something bigger than us..."
-            value={fd.sharedFaith||""} onChange={e=>updateRoom({sharedFaith:e.target.value})}/>
+            defaultValue={fd.sharedFaith||""}
+            onFocus={()=>{isTyping.current=true}}
+            onBlur={e=>{isTyping.current=false; updateRoom({sharedFaith:e.target.value})}}/>
         </div>
       </div>
     );
@@ -1043,7 +1085,7 @@ function App() {
   };
 
   /* ── HONEST SPACE ── */
-  const HonestSection = () => {
+  const HonestSection = React.memo(() => {
     const [who,setWho]   = useState("h");
     const [text,setText] = useState("");
     const [saving,setSaving] = useState(false);

@@ -447,11 +447,15 @@ function App() {
 
   /* password */
   const [unlocked, setUnlocked] = useState(()=>{
-    try{return localStorage.getItem("rba_auth")==="ok"}catch{return false}
+    try{
+  const v = localStorage.getItem("rba_v");
+  if(v !== "2") { localStorage.removeItem("rba_auth"); localStorage.setItem("rba_v","2"); return false; }
+  return localStorage.getItem("rba_auth")==="ok";
+}catch{return false}
   });
 
   /* firebase state */
-  const [loading,   setLoading]   = useState(true);
+  const [loading,   setLoading]   = useState(false);
   const [synced,    setSynced]    = useState(false);
   const [fd,        setFd]        = useState({});   // firestore data
   const [streak,    setStreak]    = useState(0);

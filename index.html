@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <meta name="theme-color" content="#0f0f14"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Us · Juha & Jane</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💑</text></svg>"/>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>*{box-sizing:border-box;margin:0;padding:0}html,body,#root{height:100%}body{background:#0f0f14}</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey:     "PASTE_YOUR_KEY",
+  authDomain: "PASTE_YOUR_DOMAIN",
+  projectId:  "PASTE_YOUR_PROJECT_ID",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const ROOM_ID = "juha-jane";
+const APP_PASSWORD = "my love";
+</script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ─── PALETTE ─── */
+const C = {
+  bg:"#0f0f14",bg2:"#16161f",bg3:"#1e1e2a",bg4:"#252535",
+  line:"#2a2a3a",line2:"#38384e",
+  text:"#f0f0f8",muted:"#8888aa",dim:"#55556a",
+  red:"#ff5c5c",green:"#3dd68c",gold:"#fbbf24",
+  blue:"#60a5fa",purple:"#a78bfa",indigo:"#818cf8",
+  pink:"#f472b6",teal:"#2dd4bf",orange:"#fb923c",
+};
+
+/* ─── TIMES ─── */
+function getTimes() {
+  const now = new Date();
+  const moscowTime = new Date(now.toLocaleString("en-US",{timeZone:"Europe/Moscow"}));
+  const londonTime = new Date(now.toLocaleString("en-US",{timeZone:"Europe/London"}));
+  const fmt = d => d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  const diff = Math.round((moscowTime - londonTime) / 3600000);
+  return {moscow: fmt(moscowTime), london: fmt(londonTime), diff};
+}
+function daysUntil(dateStr) {
+  const target = new Date(dateStr);
+  const now = new Date();
+  now.setHours(0,0,0,0); target.setHours(0,0,0,0);
+  return Math.max(0, Math.round((target - now) / 86400000));
+}
+const NEXT_VISIT = "2026-06-14";
+
+/* ─── 100 PRE-MARRIAGE QUESTIONS ─── */
+const QUESTIONS = [
+  /* ❤️ Love & Relationship */
+  {q:"What does love look like to you day-to-day — not in big gestures, but in small ones?", cat:"❤️ Love"},
+  {q:"How do you feel about the distance right now, completely honestly?", cat:"❤️ Love"},
+  {q:"What made you certain that you wanted to be with me specifically?", cat:"❤️ Love"},
+  {q:"When do you feel most loved by me?", cat:"❤️ Love"},
+  {q:"What is your biggest fear about us?", cat:"❤️ Love"},
+  {q:"What does a healthy relationship look like to you?", cat:"❤️ Love"},
+  {q:"How much alone time do you need, and how should we handle that together?", cat:"❤️ Love"},
+  {q:"What's something I do that you never want me to stop doing?", cat:"❤️ Love"},
+  {q:"How do you feel about public displays of affection?", cat:"❤️ Love"},
+  {q:"What's something you find hard to say to me but want me to know?", cat:"❤️ Love"},
+  /* 🏠 Home & Living */
+  {q:"Where do you picture us living long-term — Moscow, London, somewhere else entirely?", cat:"🏠 Home"},
+  {q:"What does your ideal home feel like? City apartment, house, garden?", cat:"🏠 Home"},
+  {q:"How important is it to you to live near your family?", cat:"🏠 Home"},
+  {q:"How do you feel about living in another country permanently?", cat:"🏠 Home"},
+  {q:"What are your non-negotiables in a shared home?", cat:"🏠 Home"},
+  {q:"How would we divide household responsibilities — cooking, cleaning, finances?", cat:"🏠 Home"},
+  {q:"How do you feel about having housemates or guests staying long-term?", cat:"🏠 Home"},
+  {q:"What does your morning routine look like, and how does that fit with mine?", cat:"🏠 Home"},
+  {q:"Do you need quiet to work from home, or are you fine with noise?", cat:"🏠 Home"},
+  {q:"How do you feel about pets?", cat:"🏠 Home"},
+  /* 👶 Children */
+  {q:"Do you want children? How many, and when?", cat:"👶 Children"},
+  {q:"If we struggled to have children, what would you want to do — IVF, adoption, living child-free?", cat:"👶 Children"},
+  {q:"What language(s) would we raise children in?", cat:"👶 Children"},
+  {q:"What kind of parent do you want to be?", cat:"👶 Children"},
+  {q:"What values are most important to you to pass on to children?", cat:"👶 Children"},
+  {q:"How do you feel about screen time, schools, and education choices?", cat:"👶 Children"},
+  {q:"Would you want your child to be raised with a religion or spiritually?", cat:"👶 Children"},
+  {q:"How would we handle disagreements about parenting?", cat:"👶 Children"},
+  {q:"How important is it that grandparents are involved in our children's lives?", cat:"👶 Children"},
+  {q:"What's your biggest fear about becoming a parent?", cat:"👶 Children"},
+  /* 💰 Money */
+  {q:"Should we have joint finances, separate accounts, or both?", cat:"💰 Money"},
+  {q:"What does financial security mean to you?", cat:"💰 Money"},
+  {q:"How do you feel about debt — student loans, mortgages, credit cards?", cat:"💰 Money"},
+  {q:"Are you a spender or a saver by nature?", cat:"💰 Money"},
+  {q:"How do we make big financial decisions together?", cat:"💰 Money"},
+  {q:"What's your relationship with money from your childhood?", cat:"💰 Money"},
+  {q:"Who should be responsible for what financially?", cat:"💰 Money"},
+  {q:"How do you feel about one of us earning significantly more than the other?", cat:"💰 Money"},
+  {q:"What's your attitude to investing, risk, and saving for the future?", cat:"💰 Money"},
+  {q:"How much financial help to family is acceptable?", cat:"💰 Money"},
+  /* 👨‍👩‍👧 Family & Parents */
+  {q:"How close are you to your family, and what does that look like practically?", cat:"👨‍👩‍👧 Family"},
+  {q:"How often do you want to visit or be visited by your parents?", cat:"👨‍👩‍👧 Family"},
+  {q:"What if our families don't get along with each other?", cat:"👨‍👩‍👧 Family"},
+  {q:"How do you handle family pressure or interference in our relationship?", cat:"👨‍👩‍👧 Family"},
+  {q:"What are your expectations around holidays — whose family, where, how often?", cat:"👨‍👩‍👧 Family"},
+  {q:"Would you be willing to financially support your parents if needed?", cat:"👨‍👩‍👧 Family"},
+  {q:"What does your family expect of you — and do you agree with those expectations?", cat:"👨‍👩‍👧 Family"},
+  {q:"What parts of how you were raised do you want to carry forward?", cat:"👨‍👩‍👧 Family"},
+  {q:"What parts of how you were raised do you want to change?", cat:"👨‍👩‍👧 Family"},
+  {q:"What would you do if a parent needed to move in with us one day?", cat:"👨‍👩‍👧 Family"},
+  /* ✝️ Religion & Beliefs */
+  {q:"What is your relationship with religion or spirituality right now?", cat:"✝️ Beliefs"},
+  {q:"Is it important to you that we share the same beliefs?", cat:"✝️ Beliefs"},
+  {q:"How do you feel about religious ceremonies for marriage or children?", cat:"✝️ Beliefs"},
+  {q:"Are there religious holidays or practices that matter to you daily?", cat:"✝️ Beliefs"},
+  {q:"How do you feel about me having different spiritual beliefs to you?", cat:"✝️ Beliefs"},
+  {q:"What are your core moral values and where do they come from?", cat:"✝️ Beliefs"},
+  {q:"How do you feel about prayer, church, or community religion?", cat:"✝️ Beliefs"},
+  {q:"Would you want our children to be raised with your religion?", cat:"✝️ Beliefs"},
+  {q:"Is there anything about my beliefs or values that concerns you?", cat:"✝️ Beliefs"},
+  {q:"What role do you want faith or meaning to play in our home?", cat:"✝️ Beliefs"},
+  /* 👯 Friends & Social Life */
+  {q:"How important are your friendships to you, and what do I need to understand about them?", cat:"👯 Friends"},
+  {q:"How do you feel about spending time with each other's friends?", cat:"👯 Friends"},
+  {q:"What happens if I don't like one of your close friends?", cat:"👯 Friends"},
+  {q:"How do you balance couple time with friend time?", cat:"👯 Friends"},
+  {q:"Are you comfortable with me having close friends of the opposite sex?", cat:"👯 Friends"},
+  {q:"How do you feel about going out separately — nights out, trips with friends?", cat:"👯 Friends"},
+  {q:"What's your ideal social life — lots of events, quiet dinners, big groups?", cat:"👯 Friends"},
+  {q:"How do you handle friendships that your partner doesn't like?", cat:"👯 Friends"},
+  {q:"How do you feel about social media and privacy within our relationship?", cat:"👯 Friends"},
+  {q:"What does a healthy level of independence look like in a relationship to you?", cat:"👯 Friends"},
+  /* 💼 Work & Career */
+  {q:"How ambitious are you, and how do you see that changing over time?", cat:"💼 Career"},
+  {q:"How do you handle stress from work — do you bring it home?", cat:"💼 Career"},
+  {q:"What if one of us gets a career opportunity that requires moving?", cat:"💼 Career"},
+  {q:"How would we handle it if one of us needed to stop working for a while?", cat:"💼 Career"},
+  {q:"Do you want to work forever or is there a point where you'd want to slow down?", cat:"💼 Career"},
+  {q:"What's the right balance between career success and home life for you?", cat:"💼 Career"},
+  {q:"How do you feel about one of us starting a business?", cat:"💼 Career"},
+  {q:"What does retirement look like to you — when, where, how?", cat:"💼 Career"},
+  /* 🌊 Conflict & Hard Times */
+  {q:"How do you fight? What happens in you when there's conflict?", cat:"🌊 Conflict"},
+  {q:"What's the thing I do that's hardest for you to deal with?", cat:"🌊 Conflict"},
+  {q:"What would be a dealbreaker for you in this relationship?", cat:"🌊 Conflict"},
+  {q:"How do you think we should handle it if we're going through a rough patch?", cat:"🌊 Conflict"},
+  {q:"What does loyalty mean to you?", cat:"🌊 Conflict"},
+  {q:"How do you feel about therapy, couples counselling, or asking for outside help?", cat:"🌊 Conflict"},
+  {q:"What would you do if you fell out of love? Would you tell me?", cat:"🌊 Conflict"},
+  {q:"How do we keep things working when life gets very hard — illness, loss, crisis?", cat:"🌊 Conflict"},
+  /* 🌅 Future & Dreams */
+  {q:"What does the best version of our life together look like to you?", cat:"🌅 Future"},
+  {q:"What are you most excited about in our future?", cat:"🌅 Future"},
+  {q:"What legacy do you want to leave?", cat:"🌅 Future"},
+  {q:"What experiences do you absolutely want to have in your life?", cat:"🌅 Future"},
+  {q:"What's something you haven't told me about what you want from the future?", cat:"🌅 Future"},
+  {q:"How do you imagine us at 60 years old?", cat:"🌅 Future"},
+  {q:"What does marriage mean to you — what changes, what stays the same?", cat:"🌅 Future"},
+  {q:"What kind of team do you want us to be?", cat:"🌅 Future"},
+  {q:"What's one thing you want us to promise each other?", cat:"🌅 Future"},
+  {q:"If you could ask me one question you've been afraid to ask, what would it be?", cat:"🌅 Future"},
+];
+
+/* ─── 60 MISSIONS ─── */
+const MISSIONS = [
+  {e:"🎙️",t:"Voice message morning",     d:"Send a good morning voice message before any text. Make it personal — say one specific thing you're looking forward to today."},
+  {e:"📸",t:"Photo diary",               d:"Share 3 photos that show what your day actually looked like. No curation allowed."},
+  {e:"❤️",t:"3 specific appreciations",  d:"Name 3 things you appreciate about them — but be specific. Not 'you're kind'. Why, and when."},
+  {e:"📞",t:"Screens-down call",         d:"Call for 10 minutes with no other screens. Just your voices. No scrolling during."},
+  {e:"💭",t:"Our favourite memory",      d:"Send your single favourite memory of you two so far. Tell them why it's that one."},
+  {e:"🧠",t:"Ask a real question",       d:"Ask something you genuinely don't know the answer to. Listen more than you talk."},
+  {e:"💬",t:"Say the unsaid thing",      d:"Say one thing out loud that you've been keeping to yourself. It can be small."},
+  {e:"📅",t:"Plan your next 48h together",d:"Plan in detail what you'll do the next time you're in the same city for 2 days."},
+  {e:"🌟",t:"Out-of-nowhere compliment", d:"Send a genuine compliment at a completely random moment today. No context needed."},
+  {e:"🎬",t:"Reaction watch party",      d:"Find something short to watch at the same time. React to each other in real time on voice."},
+  {e:"🌅",t:"Write our future",          d:"Each write a paragraph about what you imagine your life together looks like in 3 years."},
+  {e:"🤳",t:"Honest selfie",             d:"Send a selfie right now — no editing, bad angle, first attempt only."},
+  {e:"🫂",t:"Real check-in",             d:"Ask: how are you actually doing this week? Then don't move on until you've really answered."},
+  {e:"🎵",t:"Song that's us",            d:"Send one song that feels like your relationship right now. Explain exactly why."},
+  {e:"🙏",t:"Thank the tiny thing",      d:"Find something small they did that you noticed but never acknowledged. Thank them for it."},
+  {e:"🌙",t:"Falling asleep together",   d:"Start a call and just exist together while you fall asleep. No pressure to talk."},
+  {e:"💼",t:"What do you need this week",d:"Ask what they actually need from you this week. Not what you think they need — ask."},
+  {e:"😬",t:"Share a real fear",         d:"Tell them one thing you're genuinely scared of — about life, the future, or you two."},
+  {e:"🥺",t:"What I miss most right now",d:"Tell each other the most specific thing you miss about being physically together."},
+  {e:"🍝",t:"Cook the same meal live",   d:"Pick a recipe. Cook it simultaneously on video call. Eat together at the end."},
+  {e:"🎨",t:"Draw each other",           d:"Draw the other person from memory. Share at the same time. Do not prepare in advance."},
+  {e:"📖",t:"Read aloud",               d:"Each pick a favourite paragraph from any book. Read it aloud to the other person."},
+  {e:"🎯",t:"One shared goal",           d:"Agree on one thing you want to accomplish together before the end of this year. Write it down."},
+  {e:"🖼️",t:"Photo memory tour",        d:"Go through old photos together on a call. Pick 3 favourites and say what made them special."},
+  {e:"🌍",t:"I love you in 5 languages", d:"Look up 'I love you' in 5 languages neither of you speak. Say them to each other."},
+  {e:"📜",t:"Send a poem",               d:"Find a poem that says something you'd struggle to say yourself. Send it with context."},
+  {e:"🌊",t:"One honest worry",          d:"Tell each other one real worry about the future — not a complaint, a genuine concern."},
+  {e:"☀️",t:"Specific good things",      d:"Name 5 things that made you smile this week. Be specific — names, moments, details."},
+  {e:"🃏",t:"5-word portrait",           d:"Describe each other in exactly 5 words. Then do yourselves. Then compare."},
+  {e:"🧘",t:"Parallel evening",          d:"Spend an hour doing your own things on camera — reading, working, relaxing. Just company."},
+  {e:"✉️",t:"Write a real letter",       d:"Write each other a proper letter. Not a message — a letter. Then read it aloud on a call."},
+  {e:"🧩",t:"Play something together",   d:"Find a game you can play online together. Any game. Just play."},
+  {e:"🌮",t:"Rate our future travels",   d:"Each list 5 places you want to go together. Compare and find your first 3 in common."},
+  {e:"💡",t:"Teach me something",        d:"Each teach the other something you know that they don't. Make it last 5 minutes."},
+  {e:"🔭",t:"Stargazing call",           d:"Both go outside at night and look at the sky on a call. Find the same star."},
+  {e:"🎤",t:"Sing something badly",      d:"Sing a verse of any song to each other on voice note. No excuses accepted."},
+  {e:"🪴",t:"Describe your space",       d:"Give a tour of where you spend most of your time right now. Show everything, explain it."},
+  {e:"🧸",t:"Childhood story",           d:"Share a childhood memory the other person doesn't know. Make it something real."},
+  {e:"💸",t:"Dream day budget",          d:"Plan your ideal day together with no financial constraints. Every detail."},
+  {e:"🌺",t:"Send something beautiful",  d:"Photograph or find the most beautiful thing you saw this week. Send it with a sentence."},
+  {e:"🎭",t:"Two truths one lie",        d:"Send 3 statements about yourself. Other person guesses the lie. Then swap."},
+  {e:"🏃",t:"Move together",             d:"Work out, walk, or stretch on video at the same time. No agenda, just movement."},
+  {e:"📰",t:"Read the same article",     d:"Both read the same article about anything. Then voice note your reactions."},
+  {e:"🍵",t:"Morning routine together",  d:"Both make your morning drink on camera. Sit and have it together without rushing."},
+  {e:"🧑‍🍳",t:"Teach your favourite recipe",d:"Cook your most personal recipe on video while explaining why it matters to you."},
+  {e:"📱",t:"Screenshot your screen",    d:"Screenshot your home screen and camera roll right now. Explain both to each other."},
+  {e:"🛒",t:"Grocery shop together",     d:"Both go shopping (in person or online) at the same time on a call. Comment on everything."},
+  {e:"🌧️",t:"Name something hard",      d:"Name one thing that's been hard for you recently that you haven't talked about."},
+  {e:"🦋",t:"How you've changed",        d:"Tell each other: one way you've changed since you met, and whether it's because of the other person."},
+  {e:"🏡",t:"Design our future home",    d:"Each describe your ideal shared home in detail — rooms, feel, location, style. Then compare."},
+  {e:"🫀",t:"What makes you feel safe",  d:"Describe exactly what makes you feel emotionally safe with someone. Is that what I do?"},
+  {e:"🎁",t:"Surprise them",            d:"Send something unexpected — a small gift, a delivery to their door, anything thoughtful."},
+  {e:"🌀",t:"Tell me something random",  d:"Tell each other 5 random things about yourself the other person doesn't know. No filtering."},
+  {e:"🔑",t:"What I'd change",           d:"Each say one thing about yourself you're actively trying to change. Be honest."},
+  {e:"🐾",t:"Favourite simple moment",   d:"Describe the simplest, smallest moment you've shared together that you still think about."},
+  {e:"🫧",t:"Bath/shower thoughts",      d:"Share a thought you had in the shower or bath this week that you wouldn't normally say."},
+  {e:"🌻",t:"3 things that went well",   d:"Name 3 specific things that went well for you this week. Celebrate them together."},
+  {e:"🔮",t:"5-year letter",             d:"Each write a letter to yourself 5 years from now. Read it to each other."},
+  {e:"🗣️",t:"Say it out loud",          d:"Say something you usually show through actions. Say it with your actual voice, in words."},
+  {e:"🌙",t:"What keeps you up at night",d:"Tell each other one thing that genuinely keeps you awake sometimes. No minimising."},
+  {e:"💬",t:"The question you're afraid to ask",d:"Ask the question you've been avoiding. You both already know what it is."},
+];
+
+/* ─── IDEAS ─── */
+const IDEAS_PRESET = [
+  {e:"🍕",t:"Cook the same recipe live",      d:"Pick a recipe neither of you has made. Cook it simultaneously on video.", by:"system"},
+  {e:"🎮",t:"Play an online game together",   d:"Any game — chess, skribbl.io, any multiplayer. Just play for an hour.", by:"system"},
+  {e:"🗺️",t:"Plan a trip in detail",         d:"Pick a city for your next trip. Plan every single day, hour by hour.", by:"system"},
+  {e:"🎬",t:"Virtual film night",             d:"Teleparty or screen share. Pick a film at least one of you has avoided.", by:"system"},
+  {e:"📚",t:"Same book, same chapter",        d:"Start the same book. Read chapter 1. Call immediately after and discuss.", by:"system"},
+  {e:"🌄",t:"Sunset / sunrise share",         d:"The next good sky you see — photograph it immediately and send. No waiting.", by:"system"},
+  {e:"💌",t:"Physical letter",                d:"A handwritten letter, sent by post. No email substitute.", by:"system"},
+  {e:"🛁",t:"Evening routine together",       d:"Do your whole evening routine on camera. No pressure, just presence.", by:"system"},
+  {e:"☁️",t:"Cloud watching call",            d:"Both go outside. Lie down if possible. Talk about anything while watching the sky.", by:"system"},
+  {e:"🎨",t:"Make something for each other", d:"Make anything — a drawing, a playlist, a collage, a voice memo poem. Then swap.", by:"system"},
+];
+
+/* ─── CSS ─── */
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:${C.bg};color:${C.text};font-family:'Inter',-apple-system,sans-serif;min-height:100vh}
+  ::-webkit-scrollbar{width:0}
+  @keyframes ticker  {from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  @keyframes fadeUp  {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes toastIn {from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @keyframes toastOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(16px)}}
+  @keyframes overlayIn{from{opacity:0}to{opacity:1}}
+  @keyframes modalIn {from{opacity:0;transform:translateY(24px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes qFlip   {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse   {0%,100%{opacity:1}50%{opacity:.45}}
+  @keyframes heartbeat{0%,100%{transform:scale(1)}14%{transform:scale(1.3)}28%{transform:scale(1)}}
+  @keyframes lockShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  button{cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s,border-color .15s,color .15s,transform .12s,box-shadow .15s;outline:none}
+  button:hover{transform:translateY(-1px)}
+  button:active{transform:scale(.97)!important}
+  input,textarea{font-family:'Inter',sans-serif;outline:none}
+  .seg-wrap{background:${C.bg3};border-radius:12px;padding:3px;display:flex;gap:3px}
+  .seg-btn{flex:1;padding:8px 0;font-size:13px;font-weight:500;border:none;border-radius:10px;background:transparent;color:${C.muted};transition:all .15s}
+  .seg-btn.active{background:${C.bg4};color:${C.text};font-weight:600;box-shadow:0 1px 6px rgba(0,0,0,.3)}
+  .chip{padding:6px 14px;font-size:11px;font-weight:500;border-radius:20px;border:1.5px solid ${C.line};background:${C.bg2};color:${C.muted};cursor:pointer}
+  .chip.active{border-color:${C.indigo};background:rgba(129,140,248,.1);color:${C.indigo}}
+  .nav-tabs{background:${C.bg2};border-bottom:1.5px solid ${C.line};display:flex;overflow-x:auto;scrollbar-width:none}
+  .nav-tabs::-webkit-scrollbar{display:none}
+  .nav-btn{flex-shrink:0;padding:13px 6px;font-size:10px;font-weight:500;background:transparent;border:none;border-bottom:2px solid transparent;color:${C.dim};transition:color .2s,border-color .2s;white-space:nowrap;min-width:70px}
+  .nav-btn.active{color:${C.indigo};border-bottom-color:${C.indigo};font-weight:700}
+  .nav-btn.q-tab.active{color:${C.purple};border-bottom-color:${C.purple}}
+  .nav-btn.m-tab.active{color:${C.teal};border-bottom-color:${C.teal}}
+  .nav-btn.i-tab.active{color:${C.pink};border-bottom-color:${C.pink}}
+  .btn-ghost{background:transparent;border:1.5px solid ${C.line};border-radius:10px;color:${C.muted};padding:9px 14px;font-size:12px;font-weight:500}
+  .btn-ghost:hover{border-color:${C.line2};color:${C.text}}
+  .btn-primary{width:100%;padding:15px 0;border:none;border-radius:14px;font-size:15px;font-weight:700;color:#fff}
+  .btn-primary:disabled{opacity:.4;cursor:default;animation:pulse 1.2s infinite}
+  textarea.ans-input{width:100%;border:1.5px solid ${C.line};border-radius:12px;padding:13px 14px;font-size:14px;background:${C.bg3};color:${C.text};resize:none;transition:border-color .2s;line-height:1.5}
+  textarea.ans-input:focus{border-color:${C.indigo};background:${C.bg2}}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(10px);z-index:300;display:flex;align-items:flex-end;justify-content:center;animation:overlayIn .2s ease}
+  .modal-box{background:${C.bg2};border-radius:24px 24px 0 0;padding:28px 20px 40px;width:100%;max-width:480px;box-shadow:0 -12px 60px rgba(0,0,0,.5);animation:modalIn .3s cubic-bezier(.34,1.2,.64,1)}
+  .toast-el{position:fixed;bottom:28px;left:50%;background:${C.bg4};border:1px solid ${C.line2};border-radius:12px;padding:11px 20px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:${C.text};white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:400}
+  .toast-el.in {animation:toastIn  .32s cubic-bezier(.34,1.4,.64,1) forwards}
+  .toast-el.out{animation:toastOut .28s ease forwards}
+  .prog-track{height:4px;background:${C.line};border-radius:99px;overflow:hidden}
+  .prog-fill {height:100%;border-radius:99px;transition:width .6s ease}
+  .q-card{background:linear-gradient(135deg,rgba(129,140,248,.1),rgba(167,139,250,.06));border:1.5px solid rgba(129,140,248,.25);border-radius:20px;padding:28px 22px;text-align:center;animation:qFlip .35s ease}
+  .m-card{background:linear-gradient(135deg,rgba(45,212,191,.1),rgba(251,191,36,.05));border:1.5px solid rgba(45,212,191,.25);border-radius:20px;padding:24px 20px;text-align:center}
+  .idea-card{background:${C.bg2};border:1.5px solid ${C.line};border-radius:16px;padding:14px 16px;width:100%;text-align:left;cursor:pointer;transition:all .15s;display:block}
+  .idea-card:hover{border-color:${C.line2};background:${C.bg3};transform:translateY(-1px)}
+  .idea-card.done{opacity:.45;border-style:dashed}
+  .ans-bubble{background:${C.bg3};border-radius:14px;border:1px solid ${C.line};padding:12px 14px}
+  .section-wrap{animation:fadeUp .22s ease}
+  .ticker-wrap{background:#0a0a10;overflow:hidden;height:34px;display:flex;align-items:center;flex-shrink:0;mask-image:linear-gradient(to right,transparent,black 5%,black 95%,transparent);-webkit-mask-image:linear-gradient(to right,transparent,black 5%,black 95%,transparent)}
+  .heart{display:inline-block;animation:heartbeat 2.5s ease infinite}
+  .field{border:1.5px solid ${C.line};border-radius:10px;padding:10px 12px;font-size:14px;background:${C.bg3};color:${C.text};width:100%;transition:border-color .2s}
+  .field:focus{border-color:${C.indigo};background:${C.bg2}}
+  /* Password gate */
+  .lock-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:${C.bg};padding:24px}
+  .lock-box{width:100%;max-width:340px;background:${C.bg2};border:1.5px solid ${C.line};border-radius:24px;padding:36px 28px;text-align:center}
+  .lock-input{width:100%;padding:14px 16px;font-size:16px;background:${C.bg3};border:1.5px solid ${C.line};border-radius:12px;color:${C.text};text-align:center;letter-spacing:3px;transition:border-color .2s;margin:20px 0 12px}
+  .lock-input:focus{border-color:${C.indigo};outline:none;background:${C.bg}}
+  .lock-input.shake{animation:lockShake .4s ease}
+  .lock-btn{width:100%;padding:15px 0;background:linear-gradient(135deg,${C.indigo},${C.purple});border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(129,140,248,.3)}
+  .lock-btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(129,140,248,.4)}
+  .sync-dot{width:6px;height:6px;border-radius:50%;background:${C.green};animation:pulse 2s infinite;flex-shrink:0}
+  .sync-dot.off{background:${C.dim};animation:none}
+  .nav-btn.p-tab.active{color:${C.gold};border-bottom-color:${C.gold}}
+  .nav-btn.f-tab.active{color:${C.orange};border-bottom-color:${C.orange}}
+  .nav-btn.l-tab.active{color:${C.pink};border-bottom-color:${C.pink}}
+  .nav-btn.t-tab.active{color:${C.red};border-bottom-color:${C.red}}
+  .plan-card,.faith-card{background:${C.bg2};border:1.5px solid ${C.line};border-radius:16px;padding:16px}
+  .lang-card{background:${C.bg2};border:1.5px solid ${C.line};border-radius:16px;padding:16px;cursor:pointer;transition:all .15s;width:100%;text-align:left}
+  .lang-card:hover{border-color:${C.line2};background:${C.bg3};transform:translateY(-1px)}
+  .lang-card.selected{border-color:${C.pink};background:rgba(244,114,182,.08)}
+  .tension-input{width:100%;border:1.5px solid ${C.line};border-radius:12px;padding:13px 14px;font-size:14px;background:${C.bg3};color:${C.text};resize:none;transition:border-color .2s;line-height:1.5;font-family:'Inter',sans-serif}
+  .tension-input:focus{border-color:${C.red};background:${C.bg2};outline:none}
+  .milestone-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:${C.bg2};border:1.5px solid ${C.line};border-radius:12px;cursor:pointer;transition:all .15s;width:100%;text-align:left}
+  .milestone-row:hover{border-color:${C.line2};transform:translateY(-1px)}
+  .milestone-row.done{border-color:rgba(61,214,140,.3);background:rgba(61,214,140,.05)}
+`;
+
+
+/* ─── TICKER ─── */
+function TickerBar({streak, activityCount}) {
+  const {moscow, london, diff} = getTimes();
+  const now2 = new Date();
+  const tgt = new Date("2026-06-14"); tgt.setHours(0,0,0,0);
+  const totalH = Math.max(0,Math.floor((tgt-now2)/3600000));
+  const dL = Math.floor(totalH/24), hL = totalH%24;
+  const items = [
+    {e:"💑",l:"Love Rate",       v:"∞",              c:"▲",    up:true},
+    {e:"✈️",l:"Moscow → London", v:"2,513 km",       c:"",     up:null},
+    {e:"🕐",l:"Moscow",          v:moscow,            c:`+${diff}h vs LDN`, up:null},
+    {e:"🕑",l:"London",          v:london,            c:"",     up:null},
+    {e:"📅",l:"Next visit",      v:`${dL}d ${String(hL).padStart(2,"0")}h`, c:"Jun 14 ✈️",up:null},
+    {e:"⚡",l:"Activity",        v:`${activityCount||0}`, c:"actions", up:null},
+    {e:"🔥",l:"Streak",          v:`${streak||0} days`, c:"",up:null},
+  ];
+  const all=[...items,...items,...items];
+  return (
+    <div className="ticker-wrap">
+      <div style={{display:"flex",gap:44,whiteSpace:"nowrap",animation:"ticker 42s linear infinite",paddingLeft:"100%",alignItems:"center"}}>
+        {all.map((t,i)=>(
+          <span key={i} className="mono" style={{fontSize:10,display:"inline-flex",gap:5,alignItems:"center"}}>
+            <span>{t.e}</span>
+            <span style={{color:"rgba(255,255,255,.3)"}}>{t.l}</span>
+            <span style={{color:"rgba(255,255,255,.75)",fontWeight:600}}>{t.v}</span>
+            {t.c&&<span style={{color:"rgba(255,255,255,.35)",fontSize:9}}>{t.c}</span>}
+            <span style={{color:"rgba(255,255,255,.1)",marginLeft:6}}>·</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── MODAL ─── */
+function Modal({open,title,sub,body,onClose,onConfirm,confirmLabel="Confirm",confirmColor}) {
+  if(!open) return null;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e=>e.stopPropagation()}>
+        <div style={{width:36,height:4,background:C.line2,borderRadius:99,margin:"0 auto 22px"}}/>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:19,fontWeight:700,marginBottom:sub?4:0}}>{title}</div>
+          {sub&&<div className="mono" style={{fontSize:11,color:C.muted}}>{sub}</div>}
+        </div>
+        {body&&<div style={{color:C.muted,fontSize:14,textAlign:"center",lineHeight:1.65,marginBottom:22}}>{body}</div>}
+        <div style={{display:"flex",gap:10}}>
+          <button className="btn-ghost" onClick={onClose} style={{flex:1,padding:"13px 0",borderRadius:12,fontSize:14}}>Cancel</button>
+          <button onClick={onConfirm} style={{flex:1,padding:"13px 0",fontSize:14,fontWeight:700,background:confirmColor||C.indigo,border:"none",borderRadius:12,color:"#fff"}}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Toast({msg,phase}) {
+  if(!msg) return null;
+  return <div className={`toast-el ${phase}`}>{msg}</div>;
+}
+
+/* ─── PASSWORD GATE ─── */
+function LockScreen({onUnlock}) {
+  const [val,setVal] = useState("");
+  const [shake,setShake] = useState(false);
+  const [hint,setHint] = useState("");
+
+  const tryUnlock = () => {
+    if(val.trim().toLowerCase()===APP_PASSWORD.toLowerCase()){
+      try{localStorage.setItem("rba_auth","ok")}catch{}
+      onUnlock();
+    } else {
+      setShake(true); setHint("Wrong password. Try again 💛");
+      setTimeout(()=>setShake(false),450);
+      setTimeout(()=>setHint(""),2000);
+    }
+  };
+
+  return (
+    <div className="lock-screen">
+      <div className="lock-box">
+        <div style={{fontSize:48,marginBottom:14}} className="heart">💑</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.text,marginBottom:6}}>Us</div>
+        <div style={{fontSize:13,color:C.muted,lineHeight:1.6,marginBottom:4}}>Juha & Jane · a private space</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:4}}>Enter the password to continue</div>
+        <input
+          className={`lock-input${shake?" shake":""}`}
+          type="password"
+          placeholder="password"
+          value={val}
+          onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&tryUnlock()}
+          autoFocus
+        />
+        {hint&&<div style={{fontSize:12,color:C.red,marginBottom:12}}>{hint}</div>}
+        <button className="lock-btn" onClick={tryUnlock}>Enter →</button>
+        <div style={{marginTop:16,fontSize:11,color:C.dim}}>Only the two of you know this.</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── APP ─── */
+function App() {
+  useEffect(()=>{
+    const s=document.createElement("style");
+    s.textContent=CSS;
+    document.head.appendChild(s);
+    return()=>s.remove();
+  },[]);
+
+  /* password */
+  const [unlocked, setUnlocked] = useState(()=>{
+    try{return localStorage.getItem("rba_auth")==="ok"}catch{return false}
+  });
+
+  /* firebase state */
+  const [loading,   setLoading]   = useState(true);
+  const [synced,    setSynced]    = useState(false);
+  const [fd,        setFd]        = useState({});   // firestore data
+  const [streak,    setStreak]    = useState(0);
+  const [qIndex,    setQI]        = useState(0);
+  const [answers,   setAnswers]   = useState([]);
+  const [mDay,      setMDay]      = useState(0);
+  const [mDone,     setMDone]     = useState(false);
+  const [customIdeas,setCI]       = useState([]);
+  const [activityCount,setAC]     = useState(0);
+
+  /* ui state */
+  const [actor,     setActor]     = useState("h");
+  const [sec,       setSec]       = useState("home");
+  const [answerText,setAT]        = useState("");
+  const [answerWho, setAW]        = useState("h");
+  const [justAnswered,setJA]      = useState(false);
+  const [modal,     setModal]     = useState(null);
+  const [toast,     setToast]     = useState({msg:"",phase:""});
+  const [newIdeaE,  setNIE]       = useState("💡");
+  const [newIdeaT,  setNIT]       = useState("");
+  const [newIdeaD,  setNID]       = useState("");
+  const [showAddIdea,setSAI]      = useState(false);
+  const [qFilter,   setQFilter]   = useState("all");
+  const toastRef = useRef(null);
+
+  /* ── Firebase listener ── */
+  useEffect(()=>{
+    if(!unlocked) return;
+    const unsub = db.collection("rooms").doc(ROOM_ID).onSnapshot(doc=>{
+      if(doc.exists){
+        const d = doc.data();
+        setFd(d);
+        setStreak(d.streak||0);
+        setQI(d.qIndex||0);
+        setAnswers(d.answers||[]);
+        setMDay(d.mDay||0);
+        setMDone(d.mDone||false);
+        setCI(d.customIdeas||[]);
+        setAC(d.activityCount||0);
+      }
+      setLoading(false); setSynced(true);
+    }, ()=>{setLoading(false);setSynced(false);});
+    return()=>unsub();
+  },[unlocked]);
+
+  /* ── Daily mission reset ── */
+  useEffect(()=>{
+    if(!unlocked||!fd.missionDate) return;
+    const today=new Date().toDateString();
+    if(fd.missionDate!==today) updateRoom({mDone:false,mDay:(fd.mDay||0)+1,missionDate:today});
+  },[fd.missionDate,unlocked]);
+
+  const showToast=msg=>{
+    clearTimeout(toastRef.current);
+    setToast({msg,phase:"in"});
+    toastRef.current=setTimeout(()=>{
+      setToast(t=>({...t,phase:"out"}));
+      setTimeout(()=>setToast({msg:"",phase:""}),300);
+    },2400);
+  };
+
+  const updateRoom=patch=>db.collection("rooms").doc(ROOM_ID).set(patch,{merge:true});
+  const incActivity=()=>updateRoom({activityCount:(activityCount||0)+1});
+
+  const submitAnswer=()=>{
+    if(!answerText.trim()){showToast("✏️ Write your answer first");return;}
+    const entry={id:Date.now(),who:answerWho,q:QUESTIONS[qIndex].q,text:answerText.trim(),time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),date:new Date().toLocaleDateString("en-GB")};
+    const newQ=(qIndex+1)%QUESTIONS.length;
+    updateRoom({answers:[entry,...answers],streak:streak+1,qIndex:newQ,activityCount:(activityCount||0)+1});
+    showToast(`💬 Saved · ${answerWho==="h"?"🦅 Juha":"🌸 Jane"}`);
+    setAT(""); setJA(true);
+    setTimeout(()=>setJA(false),1200);
+  };
+
+  const completeMission=()=>{
+    if(mDone){showToast("✅ Already done today!");return;}
+    updateRoom({mDone:true,streak:streak+1,missionDate:new Date().toDateString(),activityCount:(activityCount||0)+1});
+    showToast("🎯 Mission done! Amazing 💪");
+  };
+
+  const toggleIdea=(idea)=>{
+    const key=`done_${idea.e}_${encodeURIComponent(idea.t)}`;
+    const was=fd[key];
+    updateRoom({[key]:!was,activityCount:(activityCount||0)+(was?0:1)});
+    showToast(was?"↩️ Unmarked":`${idea.e} Done! ✨`);
+  };
+
+  const addIdea=()=>{
+    if(!newIdeaT.trim()){showToast("⚠️ Give the idea a name");return;}
+    const idea={e:newIdeaE||"💡",t:newIdeaT.trim(),d:newIdeaD.trim(),by:actor};
+    updateRoom({customIdeas:[...customIdeas,idea],activityCount:(activityCount||0)+1});
+    setNIE("💡");setNIT("");setNID("");setSAI(false);
+    showToast(`✅ "${idea.t}" added`);
+  };
+
+  const allIdeas=[...IDEAS_PRESET,...customIdeas];
+  const todayMission=MISSIONS[mDay%MISSIONS.length];
+  const cats=[...new Set(QUESTIONS.map(q=>q.cat))];
+  const filteredQ=qFilter==="all"?QUESTIONS:QUESTIONS.filter(q=>q.cat===qFilter);
+
+  if(!unlocked) return <LockScreen onUnlock={()=>setUnlocked(true)}/>;
+
+  if(loading) return (
+    <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+      <div style={{fontSize:40}} className="heart">💑</div>
+      <div style={{fontSize:14,color:C.muted}}>Loading…</div>
+    </div>
+  );
+
+  /* ── SECTIONS ── */
+  const HomeSection = ()=>{
+    const aCount=answers.length;
+    const ideasDone=allIdeas.filter(i=>fd[`done_${i.e}_${encodeURIComponent(i.t)}`]).length;
+    const daysLeft=daysUntil(NEXT_VISIT);
+    const {moscow,london,diff}=getTimes();
+    return (
+      <div className="section-wrap" style={{paddingTop:20}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div className="heart" style={{fontSize:46,marginBottom:10}}>💑</div>
+          <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:4}}>Juha & Jane</div>
+          <div style={{fontSize:13,color:C.muted}}>a private space for just the two of you</div>
+        </div>
+
+        {/* You are */}
+        <div style={{marginBottom:18,padding:"16px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:16}}>
+          <div style={{fontSize:11,color:C.dim,marginBottom:10,fontWeight:500}}>I am opening as:</div>
+          <div className="seg-wrap">
+            <button className={`seg-btn${actor==="h"?" active":""}`} onClick={()=>setActor("h")}>🦅 Juha (London)</button>
+            <button className={`seg-btn${actor==="w"?" active":""}`} onClick={()=>setActor("w")}>🌸 Jane (Moscow)</button>
+          </div>
+        </div>
+
+        {/* Times + visit */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+          <div style={{background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14,padding:"14px"}}>
+            <div style={{fontSize:11,color:C.dim,marginBottom:4}}>🏙️ Moscow (Jane)</div>
+            <div className="mono" style={{fontSize:22,fontWeight:700,color:C.pink}}>{moscow}</div>
+          </div>
+          <div style={{background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14,padding:"14px"}}>
+            <div style={{fontSize:11,color:C.dim,marginBottom:4}}>🇬🇧 London (Juha)</div>
+            <div className="mono" style={{fontSize:22,fontWeight:700,color:C.blue}}>{london}</div>
+          </div>
+        </div>
+
+        {/* Next visit */}
+        {(()=>{
+          const daysLeft = daysUntil(NEXT_VISIT);
+          const now = new Date();
+          const target = new Date("2026-06-14");
+          target.setHours(0,0,0,0);
+          const totalMs = target - now;
+          const totalHours = Math.floor(totalMs / 3600000);
+          const days = Math.floor(totalHours / 24);
+          const hours = totalHours % 24;
+          const isPast = totalMs <= 0;
+          return (
+            <div style={{marginBottom:18,padding:"20px 18px",background:`linear-gradient(135deg,rgba(129,140,248,.12),rgba(167,139,250,.08))`,border:`1.5px solid rgba(129,140,248,.3)`,borderRadius:18,textAlign:"center"}}>
+              <div style={{fontSize:10,color:C.indigo,fontWeight:600,letterSpacing:2,marginBottom:10}}>NEXT VISIT ✈️</div>
+              {isPast ? (
+                <div>
+                  <div style={{fontSize:40,marginBottom:6}}>🎉</div>
+                  <div style={{fontSize:18,fontWeight:700,color:C.text}}>Together time!</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:4,marginBottom:6}}>
+                    <span className="mono" style={{fontSize:52,fontWeight:800,color:C.text,lineHeight:1,letterSpacing:-2}}>{days}</span>
+                    <span style={{fontSize:16,color:C.muted,fontWeight:500}}>days</span>
+                    <span className="mono" style={{fontSize:28,fontWeight:700,color:C.indigo,marginLeft:8,lineHeight:1}}>{String(hours).padStart(2,"0")}</span>
+                    <span style={{fontSize:13,color:C.muted}}>hrs</span>
+                  </div>
+                  <div style={{fontSize:13,color:C.muted,marginBottom:4}}>until June 14, 2026</div>
+                  <div style={{fontSize:11,color:C.dim}}>Jane flies to London 🛬</div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+          {[
+            {label:"Questions answered", value:aCount,      icon:"💬", color:C.purple},
+            {label:"Ideas explored",      value:ideasDone,  icon:"✨", color:C.pink},
+            {label:"Day streak",          value:streak,     icon:"🔥", color:C.gold},
+            {label:"Total activity",      value:activityCount||0, icon:"⚡", color:C.teal},
+          ].map((s,i)=>(
+            <div key={i} style={{background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14,padding:"14px"}}>
+              <div style={{fontSize:18,marginBottom:6}}>{s.icon}</div>
+              <div className="mono" style={{fontSize:24,fontWeight:700,color:s.color,lineHeight:1}}>{s.value}</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:4}}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Mission preview */}
+        <div style={{background:C.bg2,border:`1.5px solid rgba(45,212,191,.25)`,borderRadius:16,padding:"16px"}}>
+          <div style={{fontSize:10,color:C.teal,fontWeight:600,letterSpacing:2,marginBottom:8}}>TODAY'S MISSION</div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:28,flexShrink:0}}>{todayMission.e}</div>
+            <div>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>{todayMission.t}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.4}}>{todayMission.d.slice(0,80)}…</div>
+            </div>
+          </div>
+          <button onClick={()=>setSec("missions")} style={{marginTop:12,width:"100%",padding:"11px 0",border:"none",borderRadius:12,background:`rgba(45,212,191,.15)`,color:C.teal,fontWeight:600,fontSize:13,cursor:"pointer"}}>
+            {mDone?"✅ Done today! See all missions →":"Go to today's mission →"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const QSection = ()=>(
+    <div className="section-wrap" style={{paddingTop:20}}>
+      <div style={{textAlign:"center",marginBottom:16}}>
+        <div className="mono" style={{fontSize:9,color:C.purple,letterSpacing:3,marginBottom:6}}>100 QUESTIONS BEFORE MARRIAGE</div>
+        <div style={{fontSize:16,fontWeight:700}}>Question #{QUESTIONS.indexOf(QUESTIONS.find(q=>q===QUESTIONS[qIndex]))+1} <span style={{color:C.dim}}>of {QUESTIONS.length}</span></div>
+        <div style={{display:"flex",justifyContent:"center",gap:3,marginTop:10,flexWrap:"wrap"}}>
+          {QUESTIONS.map((_,i)=>(
+            <div key={i} style={{width:i===qIndex?14:4,height:4,borderRadius:99,background:i===qIndex?C.purple:i<qIndex?C.indigo:C.line,transition:"all .3s"}}/>
+          ))}
+        </div>
+      </div>
+
+      {/* category filter */}
+      <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}}>
+        <button className={`chip${qFilter==="all"?" active":""}`} onClick={()=>setQFilter("all")}>All</button>
+        {cats.map(cat=>(
+          <button key={cat} className={`chip${qFilter===cat?" active":""}`} onClick={()=>setQFilter(cat)} style={{whiteSpace:"nowrap"}}>{cat}</button>
+        ))}
+      </div>
+
+      {streak>0&&(
+        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+          <div style={{background:"rgba(251,191,36,.1)",border:`1.5px solid ${C.gold}`,borderRadius:20,padding:"5px 16px",display:"flex",alignItems:"center",gap:6}}>
+            <span>🔥</span><span className="mono" style={{fontSize:12,color:C.gold,fontWeight:600}}>{streak} streak</span>
+          </div>
+        </div>
+      )}
+
+      <div className="q-card" key={qIndex}>
+        <div style={{display:"inline-block",background:"rgba(167,139,250,.12)",border:"1.5px solid rgba(167,139,250,.3)",borderRadius:20,padding:"3px 12px",marginBottom:16}}>
+          <span className="mono" style={{fontSize:10,color:C.purple}}>{QUESTIONS[qIndex].cat}</span>
+        </div>
+        <div style={{fontSize:17,lineHeight:1.65,color:C.text,fontWeight:600}}>{QUESTIONS[qIndex].q}</div>
+        <div className="mono" style={{marginTop:14,fontSize:10,color:C.dim}}>discuss · reflect · be honest</div>
+      </div>
+
+      <div style={{marginTop:16,background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:18,padding:"18px 16px"}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>Write your answer</div>
+        <div className="seg-wrap" style={{marginBottom:12}}>
+          <button className={`seg-btn${answerWho==="h"?" active":""}`} onClick={()=>setAW("h")}>🦅 Juha answers</button>
+          <button className={`seg-btn${answerWho==="w"?" active":""}`} onClick={()=>setAW("w")}>🌸 Jane answers</button>
+        </div>
+        <textarea className="ans-input" rows={3} placeholder="Be honest. This is just for you two." value={answerText} onChange={e=>setAT(e.target.value)} disabled={justAnswered}/>
+        <button className="btn-primary" style={{marginTop:12,background:`linear-gradient(135deg,${C.indigo},${C.purple})`,boxShadow:"0 4px 18px rgba(129,140,248,.25)"}} disabled={justAnswered||!answerText.trim()} onClick={submitAnswer}>
+          {justAnswered?"Saving…":"Save answer →"}
+        </button>
+      </div>
+
+      <button className="btn-ghost" onClick={()=>updateRoom({qIndex:(qIndex+1)%QUESTIONS.length})} style={{width:"100%",marginTop:10,padding:"12px 0",fontSize:12,textAlign:"center"}}>
+        → Skip to next question
+      </button>
+
+      <div style={{marginTop:16,padding:"14px 16px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:11,color:C.dim}}>Progress</span>
+          <span className="mono" style={{fontSize:11,color:C.muted}}>{answers.length} answered</span>
+        </div>
+        <div className="prog-track">
+          <div className="prog-fill" style={{width:`${(qIndex/QUESTIONS.length)*100}%`,background:`linear-gradient(90deg,${C.indigo},${C.purple})`}}/>
+        </div>
+      </div>
+
+      {answers.length>0&&(
+        <div style={{marginTop:20}}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}}>Recent answers</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {answers.slice(0,5).map(a=>(
+              <div key={a.id} className="ans-bubble">
+                <div style={{fontSize:10,color:C.dim,marginBottom:5,fontStyle:"italic"}}>"{a.q.slice(0,60)}…"</div>
+                <div style={{fontSize:13,color:C.text,fontWeight:500,marginBottom:6,lineHeight:1.5}}>{a.text}</div>
+                <div className="mono" style={{fontSize:10,color:C.dim}}>{a.who==="h"?"🦅 Juha":"🌸 Jane"} · {a.time}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const MissionsSection = ()=>(
+    <div className="section-wrap" style={{paddingTop:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:15,fontWeight:700}}>🎯 Daily Missions</div>
+        <span className="mono" style={{fontSize:9,color:C.dim,letterSpacing:2}}>DAY {mDay%MISSIONS.length+1}/{MISSIONS.length}</span>
+      </div>
+
+      <div className="m-card" style={{marginBottom:16}}>
+        <div className="mono" style={{fontSize:9,color:C.teal,letterSpacing:3,marginBottom:10}}>TODAY</div>
+        <div style={{fontSize:36,marginBottom:10}}>{todayMission.e}</div>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:8}}>{todayMission.t}</div>
+        <div style={{fontSize:14,color:C.muted,lineHeight:1.65,marginBottom:20}}>{todayMission.d}</div>
+        {!mDone?(
+          <button onClick={completeMission} style={{width:"100%",padding:"14px 0",border:"none",borderRadius:14,background:`linear-gradient(135deg,${C.teal},#0891b2)`,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",boxShadow:"0 4px 18px rgba(45,212,191,.25)"}}>
+            ✅ We did this!
+          </button>
+        ):(
+          <div style={{padding:"14px",background:"rgba(45,212,191,.1)",border:`1.5px solid rgba(45,212,191,.3)`,borderRadius:14,textAlign:"center"}}>
+            <div style={{fontSize:20,marginBottom:4}}>✅</div>
+            <div style={{fontSize:13,fontWeight:600,color:C.teal}}>Mission complete!</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>New mission tomorrow</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{padding:"12px 16px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:11,color:C.dim}}>Mission progress</span>
+          <span className="mono" style={{fontSize:11,color:C.muted}}>Day {mDay%MISSIONS.length+1} of {MISSIONS.length}</span>
+        </div>
+        <div className="prog-track">
+          <div className="prog-fill" style={{width:`${((mDay%MISSIONS.length+1)/MISSIONS.length)*100}%`,background:`linear-gradient(90deg,${C.teal},${C.blue})`}}/>
+        </div>
+      </div>
+
+      <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:10}}>Upcoming missions</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {MISSIONS.slice((mDay+1)%MISSIONS.length,(mDay+1)%MISSIONS.length+6).map((m,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"12px 14px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:12,opacity:0.55}}>
+            <span style={{fontSize:20,flexShrink:0}}>{m.e}</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:C.text}}>{m.t}</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:2,lineHeight:1.4}}>{m.d.slice(0,70)}…</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const IdeasSection = ()=>(
+    <div className="section-wrap" style={{paddingTop:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:15,fontWeight:700}}>✨ Ideas for us</div>
+        <span className="mono" style={{fontSize:9,color:C.dim}}>{allIdeas.filter(i=>fd[`done_${i.e}_${encodeURIComponent(i.t)}`]).length}/{allIdeas.length} done</span>
+      </div>
+      <div style={{fontSize:13,color:C.muted,lineHeight:1.6,marginBottom:18,padding:"12px 14px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:14}}>
+        Things to do together. No pressure, no score. Tap ✅ when you've done one. Add your own ideas below.
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+        {allIdeas.map((idea,i)=>{
+          const key=`done_${idea.e}_${encodeURIComponent(idea.t)}`;
+          const isDone=fd[key];
+          return (
+            <button key={i} className={`idea-card${isDone?" done":""}`} onClick={()=>toggleIdea(idea)}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                <span style={{fontSize:22,flexShrink:0,marginTop:1}}>{idea.e}</span>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:14,fontWeight:600,color:isDone?C.dim:C.text}}>{idea.t}</div>
+                    <div style={{fontSize:16,marginLeft:8,flexShrink:0}}>{isDone?"✅":"○"}</div>
+                  </div>
+                  {idea.d&&<div style={{fontSize:12,color:C.muted,marginTop:3,lineHeight:1.5}}>{idea.d}</div>}
+                  {idea.by&&idea.by!=="system"&&<div className="mono" style={{fontSize:10,color:C.dim,marginTop:4}}>added by {idea.by==="h"?"🦅 Juha":"🌸 Jane"}</div>}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {!showAddIdea?(
+        <button className="btn-ghost" onClick={()=>setSAI(true)} style={{width:"100%",padding:"12px 0",borderStyle:"dashed",fontSize:13,textAlign:"center"}}>+ Add your own idea</button>
+      ):(
+        <div style={{background:C.bg2,border:`1.5px solid ${C.pink}`,borderRadius:16,padding:"16px 14px"}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:14,color:C.pink}}>✦ New idea</div>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <input value={newIdeaE} onChange={e=>setNIE(e.target.value)} maxLength={2} className="field" style={{width:52,textAlign:"center",fontSize:20,padding:"8px 4px"}}/>
+            <input value={newIdeaT} onChange={e=>setNIT(e.target.value)} placeholder="What's the idea?" className="field" style={{flex:1}}/>
+          </div>
+          <textarea className="ans-input" rows={2} placeholder="Details (optional)…" value={newIdeaD} onChange={e=>setNID(e.target.value)} style={{marginBottom:10}}/>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn-ghost" onClick={()=>setSAI(false)} style={{flex:1,padding:"11px 0"}}>Cancel</button>
+            <button onClick={addIdea} style={{flex:2,padding:"11px 0",background:C.pink,border:"none",borderRadius:10,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add →</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const HistorySection = ()=>{
+    const [hf,setHf]=useState("all");
+    const filtered=hf==="all"?answers:answers.filter(a=>a.who===hf);
+    return (
+      <div className="section-wrap" style={{paddingTop:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:15,fontWeight:700}}>📖 Our answers</div>
+          <span className="mono" style={{fontSize:9,color:C.dim}}>{answers.length} TOTAL</span>
+        </div>
+        <div style={{display:"flex",gap:6,marginBottom:14}}>
+          {[["all","All"],["h","🦅 Juha"],["w","🌸 Jane"]].map(([v,l])=>(
+            <button key={v} className={`chip${hf===v?" active":""}`} onClick={()=>setHf(v)}>{l}</button>
+          ))}
+        </div>
+        {filtered.length===0?(
+          <div style={{textAlign:"center",padding:"60px 0",color:C.dim}}>
+            <div style={{fontSize:36,marginBottom:14}}>🌸</div>
+            <div className="mono" style={{fontSize:12}}>no answers yet — go to Connect</div>
+          </div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {filtered.map(a=>(
+              <div key={a.id} className="ans-bubble">
+                <div style={{fontSize:10,color:C.dim,marginBottom:5,fontStyle:"italic"}}>"{a.q}"</div>
+                <div style={{fontSize:13,color:C.text,fontWeight:500,marginBottom:8,lineHeight:1.55}}>{a.text}</div>
+                <div className="mono" style={{fontSize:10,color:C.dim}}>{a.who==="h"?"🦅 Juha":"🌸 Jane"} · {a.time} · {a.date}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* ── OUR PLAN ── */
+  const PlanSection = () => {
+    const milestones = [
+      {id:"m1",e:"💬",t:"Have the 'are we serious' talk",      d:"Explicitly agree on where this is going and on what timeline."},
+      {id:"m2",e:"✈️",t:"Plan the next 3 visits",              d:"Put actual dates in the calendar. Not 'sometime soon'."},
+      {id:"m3",e:"🌍",t:"Decide who moves and when",           d:"Moscow or London — or somewhere else? Make a real decision with a date."},
+      {id:"m4",e:"📅",t:"Set a decision date",                 d:"Agree on a date by which you'll know if marriage is the direction."},
+      {id:"m5",e:"💍",t:"Talk about marriage as a plan",       d:"Not as a dream — as a plan. What does it look like practically?"},
+      {id:"m6",e:"🏠",t:"Decide where you'll live together",   d:"Which city, whose country, renting or buying?"},
+      {id:"m7",e:"👶",t:"Have the children conversation",      d:"Do you want them, when, how many? What if it's hard?"},
+      {id:"m8",e:"✝️",t:"Resolve the religion question",      d:"How will your faiths coexist in one home and one family?"},
+      {id:"m9",e:"📋",t:"Meet each other's families properly", d:"Not just video call — actually spend real time with them."},
+      {id:"m10",e:"🤝",t:"Make a joint decision together",     d:"Anything. A trip, a promise. Practice deciding as a unit."},
+    ];
+    return (
+      <div className="section-wrap" style={{paddingTop:20}}>
+        <div style={{marginBottom:18,padding:"16px",background:`linear-gradient(135deg,rgba(251,191,36,.1),rgba(251,191,36,.04))`,border:`1.5px solid rgba(251,191,36,.3)`,borderRadius:16}}>
+          <div style={{fontSize:10,color:C.gold,fontWeight:600,letterSpacing:2,marginBottom:8}}>WHY THIS MATTERS</div>
+          <div style={{fontSize:14,color:C.text,lineHeight:1.7}}>The biggest reason long-distance relationships end isn't the distance — it's the <span style={{color:C.gold,fontWeight:600}}>absence of a clear plan</span> to close it. These are the conversations you need to have.</div>
+        </div>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:14}}>🗺️ Our roadmap</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {milestones.map(m=>{
+            const key=`plan_${m.id}`;
+            const done=fd[key];
+            return (
+              <button key={m.id} className={`milestone-row${done?" done":""}`} onClick={()=>updateRoom({[key]:!done,activityCount:(activityCount||0)+1})}>
+                <div style={{fontSize:22,flexShrink:0}}>{done?"✅":m.e}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:600,color:done?C.muted:C.text}}>{m.t}</div>
+                  <div style={{fontSize:12,color:C.dim,marginTop:2,lineHeight:1.4}}>{m.d}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{marginTop:20,background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:16,padding:"16px"}}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}}>Our notes on the plan</div>
+          <textarea className="tension-input" rows={4}
+            placeholder="Write anything you've agreed, decided, or want to remember about your plan together..."
+            value={fd.planNotes||""}
+            onChange={e=>updateRoom({planNotes:e.target.value})}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  /* ── FAITH & FAMILY ── */
+  const FaithSection = () => {
+    const [activeTopic, setActiveTopic] = useState(null);
+    const topics = [
+      {id:"f1",e:"✝️",label:"Ceremony",        q:"How will we get married? Orthodox ceremony, Mormon ceremony, both, or civil?"},
+      {id:"f2",e:"🙏",label:"Daily faith",      q:"What does faith look like in our daily home life — prayer, fasting, services?"},
+      {id:"f3",e:"👶",label:"Children's faith", q:"In which tradition will we raise children? Or will we let them choose?"},
+      {id:"f4",e:"📖",label:"Scripture",         q:"How do we respect that we each have our own sacred texts and practices?"},
+      {id:"f5",e:"🎄",label:"Holidays",          q:"Christmas, Easter (Orthodox & Western), LDS observances — how do we navigate all of them?"},
+      {id:"f6",e:"👨‍👩‍👧",label:"Community",    q:"His church in London, her church in Moscow — how do both stay part of our life?"},
+      {id:"f7",e:"🤲",label:"Shared values",     q:"What values do Orthodoxy and LDS share that you both believe in?"},
+      {id:"f8",e:"💫",label:"Differences",       q:"What differences in your beliefs are you genuinely okay with? What concerns you?"},
+    ];
+    return (
+      <div className="section-wrap" style={{paddingTop:20}}>
+        <div style={{marginBottom:18,padding:"16px",background:`linear-gradient(135deg,rgba(251,115,22,.1),rgba(251,115,22,.04))`,border:`1.5px solid rgba(251,115,22,.3)`,borderRadius:16}}>
+          <div style={{fontSize:10,color:C.orange,fontWeight:600,letterSpacing:2,marginBottom:8}}>HONEST NOTE</div>
+          <div style={{fontSize:14,color:C.text,lineHeight:1.7}}>Orthodox and LDS are <span style={{color:C.orange,fontWeight:600}}>genuinely different</span> in theology and practice. That's not a problem — but it needs real conversations. This space is for those.</div>
+        </div>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:14}}>✝️ Faith & family</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+          {topics.map(t=>{
+            const key=`faith_${t.id}`;
+            const note=fd[key]||"";
+            const isOpen=activeTopic===t.id;
+            return (
+              <div key={t.id} style={{background:C.bg2,border:`1.5px solid ${note?"rgba(251,115,22,.4)":C.line}`,borderRadius:14,overflow:"hidden"}}>
+                <button onClick={()=>setActiveTopic(isOpen?null:t.id)} style={{width:"100%",padding:"14px 16px",background:"transparent",border:"none",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+                  <span style={{fontSize:22,flexShrink:0}}>{t.e}</span>
+                  <div style={{flex:1,textAlign:"left"}}>
+                    <div style={{fontSize:14,fontWeight:600,color:C.text}}>{t.label}</div>
+                    <div style={{fontSize:12,color:C.muted,marginTop:1}}>{t.q}</div>
+                  </div>
+                  <div style={{fontSize:12,color:note?C.orange:C.dim,flexShrink:0}}>{note?"✍️":"○"}</div>
+                </button>
+                {isOpen&&(
+                  <div style={{padding:"0 16px 16px"}}>
+                    <textarea className="tension-input" style={{borderColor:"rgba(251,115,22,.4)"}} rows={3}
+                      placeholder="Write what you've discussed or decided..."
+                      value={note} onChange={e=>updateRoom({[key]:e.target.value})}/>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:16,padding:"16px"}}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:6,color:C.muted}}>Our shared intention</div>
+          <div style={{fontSize:12,color:C.dim,marginBottom:10,lineHeight:1.5}}>What do you both believe about your relationship — regardless of denomination?</div>
+          <textarea className="tension-input" rows={3}
+            placeholder="e.g. We both believe our relationship is guided by something bigger than us..."
+            value={fd.sharedFaith||""} onChange={e=>updateRoom({sharedFaith:e.target.value})}/>
+        </div>
+      </div>
+    );
+  };
+
+  /* ── LOVE LANGUAGES ── */
+  const LoveSection = () => {
+    const langs = [
+      {id:"words",  e:"💬",t:"Words of affirmation",d:"Feeling loved through compliments, 'I love you', appreciation in words"},
+      {id:"time",   e:"⏱️",t:"Quality time",        d:"Feeling loved through undivided attention, focused presence, shared experiences"},
+      {id:"touch",  e:"🤝",t:"Physical touch",      d:"Feeling loved through physical closeness, hugs, holding hands, presence"},
+      {id:"gifts",  e:"🎁",t:"Gifts",               d:"Feeling loved through thoughtful gestures, surprises, tokens of being thought of"},
+      {id:"service",e:"🛠️",t:"Acts of service",     d:"Feeling loved through practical help, doing things for each other, care"},
+    ];
+    const juhaL=fd.juhaLang||null, juhaL2=fd.juhaLang2||null;
+    const janeL=fd.janeLang||null, janeL2=fd.janeLang2||null;
+    return (
+      <div className="section-wrap" style={{paddingTop:20}}>
+        <div style={{marginBottom:18,padding:"16px",background:`linear-gradient(135deg,rgba(244,114,182,.1),rgba(244,114,182,.04))`,border:`1.5px solid rgba(244,114,182,.3)`,borderRadius:16}}>
+          <div style={{fontSize:10,color:C.pink,fontWeight:600,letterSpacing:2,marginBottom:8}}>WHY THIS MATTERS ON DISTANCE</div>
+          <div style={{fontSize:14,color:C.text,lineHeight:1.7}}>Physical touch is mostly unavailable at distance. If that's your primary love language, you need to know it — and find ways to meet each other through the others. <span style={{color:C.pink,fontWeight:600}}>Knowing this changes how you love each other every day.</span></div>
+        </div>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>💕 Love languages</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Select primary then secondary. Tap to deselect.</div>
+        {[["h","🦅 Juha","juhaLang","juhaLang2",[juhaL,juhaL2]],["w","🌸 Jane","janeLang","janeLang2",[janeL,janeL2]]].map(([who,name,pk,sk,sel])=>(
+          <div key={who} style={{marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:who==="h"?C.indigo:C.pink}}>{name}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {langs.map(l=>{
+                const isPrimary=sel[0]===l.id, isSecond=sel[1]===l.id;
+                return (
+                  <button key={l.id} className={`lang-card${isPrimary||isSecond?" selected":""}`}
+                    style={{borderColor:isPrimary?(who==="h"?C.indigo:C.pink):isSecond?"rgba(244,114,182,.4)":C.line}}
+                    onClick={()=>{
+                      if(!sel[0]) updateRoom({[pk]:l.id});
+                      else if(sel[0]===l.id) updateRoom({[pk]:null,[sk]:null});
+                      else if(!sel[1]) updateRoom({[sk]:l.id});
+                      else if(sel[1]===l.id) updateRoom({[sk]:null});
+                      else updateRoom({[pk]:l.id,[sk]:null});
+                    }}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:20}}>{l.e}</span>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:14,fontWeight:600,color:C.text}}>{l.t}</div>
+                        <div style={{fontSize:12,color:C.muted,marginTop:1}}>{l.d}</div>
+                      </div>
+                      {isPrimary&&<span style={{fontSize:10,fontWeight:700,color:who==="h"?C.indigo:C.pink,background:`rgba(${who==="h"?"129,140,248":"244,114,182"},.15)`,padding:"3px 8px",borderRadius:20,flexShrink:0}}>PRIMARY</span>}
+                      {isSecond&&<span style={{fontSize:10,fontWeight:700,color:C.muted,background:C.bg3,padding:"3px 8px",borderRadius:20,flexShrink:0}}>2ND</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {juhaL&&janeL&&(
+          <div style={{background:`linear-gradient(135deg,rgba(244,114,182,.1),rgba(129,140,248,.08))`,border:`1.5px solid rgba(244,114,182,.3)`,borderRadius:16,padding:"16px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:C.pink,fontWeight:600,letterSpacing:2,marginBottom:10}}>YOUR MATCH</div>
+            <div style={{fontSize:14,color:C.text,lineHeight:1.8}}>
+              Juha feels most loved through <span style={{color:C.indigo,fontWeight:600}}>{langs.find(l=>l.id===juhaL)?.t}</span>{juhaL2&&<span style={{color:C.dim}}> + {langs.find(l=>l.id===juhaL2)?.t}</span>}.<br/>
+              Jane feels most loved through <span style={{color:C.pink,fontWeight:600}}>{langs.find(l=>l.id===janeL)?.t}</span>{janeL2&&<span style={{color:C.dim}}> + {langs.find(l=>l.id===janeL2)?.t}</span>}.
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* ── HONEST SPACE ── */
+  const HonestSection = () => {
+    const [who,setWho]   = useState("h");
+    const [text,setText] = useState("");
+    const [saving,setSaving] = useState(false);
+    const notes = fd.honestNotes||[];
+    const submit = () => {
+      if(!text.trim()) return;
+      const entry={id:Date.now(),who,text:text.trim(),time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),date:new Date().toLocaleDateString("en-GB")};
+      updateRoom({honestNotes:[entry,...notes],activityCount:(activityCount||0)+1});
+      setText(""); setSaving(true);
+      setTimeout(()=>setSaving(false),1200);
+    };
+    const prompts = [
+      "Something I haven't said because I wasn't sure how you'd take it…",
+      "Something the distance makes really hard for me right now…",
+      "Something I want physically that I can't have right now…",
+      "A fear I have about us that I haven't fully admitted…",
+      "Something I need more of from you, even though it's hard to ask…",
+      "A moment recently when I felt really close to you…",
+      "Something I'm proud of about how far we've come…",
+      "Something about waiting that I find hard to talk about…",
+    ];
+    return (
+      <div className="section-wrap" style={{paddingTop:20}}>
+        <div style={{marginBottom:18,padding:"16px",background:`linear-gradient(135deg,rgba(255,92,92,.1),rgba(255,92,92,.04))`,border:`1.5px solid rgba(255,92,92,.3)`,borderRadius:16}}>
+          <div style={{fontSize:10,color:C.red,fontWeight:600,letterSpacing:2,marginBottom:8}}>WHAT THIS IS FOR</div>
+          <div style={{fontSize:14,color:C.text,lineHeight:1.7}}>A private space for things that are <span style={{color:C.red,fontWeight:600}}>hard to say out loud</span>. Longing, tension, fear, desire — the things that accumulate when you're apart. Nothing here is wrong. Silence is the only danger.</div>
+        </div>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:C.muted}}>Starting points — tap to use</div>
+        <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:16}}>
+          {prompts.map((p,i)=>(
+            <button key={i} onClick={()=>setText(p)} style={{flexShrink:0,maxWidth:190,padding:"10px 12px",background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:12,fontSize:12,color:C.muted,textAlign:"left",lineHeight:1.4,cursor:"pointer"}}>
+              {p}
+            </button>
+          ))}
+        </div>
+        <div style={{background:C.bg2,border:`1.5px solid ${C.line}`,borderRadius:18,padding:"18px 16px",marginBottom:20}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>Write it down</div>
+          <div className="seg-wrap" style={{marginBottom:12}}>
+            <button className={`seg-btn${who==="h"?" active":""}`} onClick={()=>setWho("h")}>🦅 Juha</button>
+            <button className={`seg-btn${who==="w"?" active":""}`} onClick={()=>setWho("w")}>🌸 Jane</button>
+          </div>
+          <textarea className="tension-input" rows={4} placeholder="Say the thing you haven't said yet. This is a safe space." value={text} onChange={e=>setText(e.target.value)}/>
+          <button className="btn-primary"
+            style={{marginTop:12,background:`linear-gradient(135deg,${C.red},#c0392b)`,boxShadow:"0 4px 18px rgba(255,92,92,.2)",opacity:text.trim()&&!saving?1:.5}}
+            disabled={!text.trim()||saving} onClick={submit}>
+            {saving?"Saved ✓":"Say it →"}
+          </button>
+        </div>
+        {notes.length>0&&(
+          <div>
+            <div style={{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}}>What's been said</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {notes.map(n=>(
+                <div key={n.id} style={{background:C.bg2,border:`1.5px solid rgba(255,92,92,.2)`,borderRadius:14,padding:"14px 16px"}}>
+                  <div style={{fontSize:13,color:C.text,fontWeight:500,lineHeight:1.6,marginBottom:8}}>{n.text}</div>
+                  <div className="mono" style={{fontSize:10,color:C.dim}}>{n.who==="h"?"🦅 Juha":"🌸 Jane"} · {n.time} · {n.date}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto"}}>
+
+      <div style={{background:"#0a0a10",padding:"14px 16px 12px",flexShrink:0,borderBottom:`1px solid ${C.line}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>
+              <span className="heart" style={{marginRight:8}}>💑</span>Us
+            </div>
+            <div style={{fontSize:11,color:C.dim,marginTop:2}}>Juha & Jane · private</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div className={`sync-dot${synced?"":" off"}`}/>
+            <span className="mono" style={{fontSize:9,color:synced?C.green:C.dim}}>{synced?"live":"offline"}</span>
+          </div>
+        </div>
+      </div>
+
+      <TickerBar streak={streak} activityCount={activityCount}/>
+
+      <div className="nav-tabs" style={{flexShrink:0}}>
+        {[
+          ["home",    "🏠 Home"],
+          ["questions","💬 Connect"],
+          ["missions","🎯 Missions"],
+          ["ideas",   "✨ Ideas"],
+          ["plan",    "🗺️ Plan"],
+          ["faith",   "✝️ Faith"],
+          ["love",    "💕 Love"],
+          ["honest",  "🔥 Honest"],
+          ["history", "📖 History"],
+        ].map(([s,l])=>(
+          <button key={s} className={`nav-btn${sec===s?" active":""}${s==="questions"?" q-tab":""}${s==="missions"?" m-tab":""}${s==="ideas"?" i-tab":""}${s==="plan"?" p-tab":""}${s==="faith"?" f-tab":""}${s==="love"?" l-tab":""}${s==="honest"?" t-tab":""}`} onClick={()=>setSec(s)}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"0 14px 100px"}}>
+        {sec==="home"     &&<HomeSection/>}
+        {sec==="questions"&&<QSection/>}
+        {sec==="missions" &&<MissionsSection/>}
+        {sec==="ideas"    &&<IdeasSection/>}
+        {sec==="plan"     &&<PlanSection/>}
+        {sec==="faith"    &&<FaithSection/>}
+        {sec==="love"     &&<LoveSection/>}
+        {sec==="honest"   &&<HonestSection/>}
+        {sec==="history"  &&<HistorySection/>}
+      </div>
+
+      <div className="mono" style={{textAlign:"center",padding:"12px 14px",borderTop:`1.5px solid ${C.line}`,background:C.bg2,fontSize:9,color:C.dim,flexShrink:0,lineHeight:2}}>
+        Juha & Jane · private <span className="heart">♡</span>
+      </div>
+
+      <Modal open={!!modal} title={modal?.title} sub={modal?.sub} body={modal?.body} onClose={()=>setModal(null)} onConfirm={modal?.onConfirm} confirmLabel={modal?.confirmLabel||"Confirm"} confirmColor={modal?.confirmColor}/>
+      <Toast msg={toast.msg} phase={toast.phase}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
